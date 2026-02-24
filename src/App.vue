@@ -1,7 +1,6 @@
 <script setup>
-// Importamos la función 'ref' para crear variables reactivas (que cambian la pantalla)
 import { ref } from 'vue';
-
+import Login from './components/Acceso.vue';
 import Profesores from './components/Profesores.vue';
 import Alumnos from './components/Alumnos.vue';
 import Cursos from './components/Cursos.vue';
@@ -12,128 +11,124 @@ import Turnos from './components/Turnos.vue';
 import Departamentos from './components/Departamentos.vue';
 import Roles from './components/Roles.vue';
 import Credenciales from './components/Credenciales.vue'; 
-
-const pantallaActual = ref('credenciales');
+import Acceso from './components/Acceso.vue';
 </script>
 
 <template>
   <div class="min-vh-100 bg-light">
     
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary px-4 shadow">
-      
-      <a class="navbar-brand fw-bold" href="#">Escarlatti-Gest</a>
-      
-      <div class="ms-auto d-flex gap-2">
-        <button 
-          @click="pantallaActual = 'credenciales'" 
-          class="btn" 
-          :class="pantallaActual === 'credenciales' ? 'btn-light text-primary fw-bold' : 'btn-outline-light'"
-        >
-          Credenciales
-        </button>
+    <Acceso v-if="usuarioActual === null" @acceso-concedido="gestionarEntrada" />
 
-        <button 
-          @click="pantallaActual = 'profesores'" 
-          class="btn" 
-          :class="pantallaActual === 'profesores' ? 'btn-light text-primary fw-bold' : 'btn-outline-light'"
-        >
-          Profesores
-        </button>
-
-        <button 
-          @click="pantallaActual = 'alumnos'" 
-          class="btn" 
-          :class="pantallaActual === 'alumnos' ? 'btn-light text-primary fw-bold' : 'btn-outline-light'"
-        >
-          Alumnos
-        </button>
-
-        <button 
-          @click="pantallaActual = 'cursos'" 
-          class="btn" 
-          :class="pantallaActual === 'cursos' ? 'btn-light text-primary fw-bold' : 'btn-outline-light'"
-        >
-          Cursos
-        </button>
-
+    <div v-else>
+      <nav class="navbar navbar-expand-lg navbar-dark bg-primary px-4 shadow">
+        <a class="navbar-brand fw-bold" href="#">Escarlatti-Gest</a>
         
+        <div class="ms-auto d-flex align-items-center gap-3">
+          <span class="text-white fw-bold">
+            Hola, {{ usuarioActual.nombre }} {{ usuarioActual.apellidos }} ({{ usuarioActual.rol }})
+          </span>
+          <button @click="cerrarSesion" class="btn btn-outline-light btn-sm fw-bold">Cerrar Sesión</button>
+        </div>
+      </nav>
 
-        <button 
-          @click="pantallaActual = 'espacios'" 
-          class="btn" 
-          :class="pantallaActual === 'espacios' ? 'btn-light text-primary fw-bold' : 'btn-outline-light'"
-        >
-          Espacios
+      <div class="bg-white p-3 shadow-sm mb-4 d-flex flex-wrap gap-2 justify-content-center border-bottom">
+        
+        <button @click="pantallaSeleccionada = 'incidencias'" class="btn" :class="pantallaSeleccionada === 'incidencias' ? 'btn-primary' : 'btn-outline-primary'">
+          Crear Incidencia
         </button>
 
-          <button 
-            @click="pantallaActual = 'estados'" 
-            class="btn" 
-            :class="pantallaActual === 'estados' ? 'btn-light text-primary fw-bold' : 'btn-outline-light'"
-          >
-            Estados
-          </button>
-
-        <button 
-          @click="pantallaActual = 'etapas'" 
-          class="btn" 
-          :class="pantallaActual === 'etapas' ? 'btn-light text-primary fw-bold' : 'btn-outline-light'"
-        >
-          Etapas
+        <button v-if="esProfesor || esTic || esAdmin" @click="pantallaSeleccionada = 'reservas'" class="btn" :class="pantallaSeleccionada === 'reservas' ? 'btn-primary' : 'btn-outline-primary'">
+          Reserva de Espacios
         </button>
 
-        <button 
-          @click="pantallaActual = 'turnos'" 
-          class="btn" 
-          :class="pantallaActual === 'turnos' ? 'btn-light text-primary fw-bold' : 'btn-outline-light'"
-        >
-          Turnos
+        <button v-if="esTic || esAdmin" @click="pantallaSeleccionada = 'resolver'" class="btn" :class="pantallaSeleccionada === 'resolver' ? 'btn-primary' : 'btn-outline-primary'">
+          Resolución Incidencias
         </button>
 
-        <button 
-          @click="pantallaActual = 'departamentos'" 
-          class="btn" 
-          :class="pantallaActual === 'departamentos' ? 'btn-light text-primary fw-bold' : 'btn-outline-light'"
-        >
-          Departamentos
-        </button>
-      
-        <button 
-          @click="pantallaActual = 'roles'" 
-          class="btn" 
-          :class="pantallaActual === 'roles' ? 'btn-light text-primary fw-bold' : 'btn-outline-light'"
-        > 
-          Roles
-        </button>
-
+        <template v-if="esAdmin">
+          <span class="ms-3 border-start border-2 border-secondary ps-3 my-auto fw-bold text-secondary">Mantenimiento:</span>
+          <button @click="pantallaSeleccionada = 'credenciales'" class="btn btn-sm" :class="pantallaSeleccionada === 'credenciales' ? 'btn-dark' : 'btn-outline-dark'">Credenciales</button>
+          <button @click="pantallaSeleccionada = 'profesores'" class="btn btn-sm" :class="pantallaSeleccionada === 'profesores' ? 'btn-dark' : 'btn-outline-dark'">Profesores</button>
+          <button @click="pantallaSeleccionada = 'alumnos'" class="btn btn-sm" :class="pantallaSeleccionada === 'alumnos' ? 'btn-dark' : 'btn-outline-dark'">Alumnos</button>
+          <button @click="pantallaSeleccionada = 'cursos'" class="btn btn-sm" :class="pantallaSeleccionada === 'cursos' ? 'btn-dark' : 'btn-outline-dark'">Cursos</button>
+          <button @click="pantallaSeleccionada = 'espacios'" class="btn btn-sm" :class="pantallaSeleccionada === 'espacios' ? 'btn-dark' : 'btn-outline-dark'">Espacios</button>
+          <button @click="pantallaSeleccionada = 'estados'" class="btn btn-sm" :class="pantallaSeleccionada === 'estados' ? 'btn-dark' : 'btn-outline-dark'">Estados</button>
+          <button @click="pantallaSeleccionada = 'etapas'" class="btn btn-sm" :class="pantallaSeleccionada === 'etapas' ? 'btn-dark' : 'btn-outline-dark'">Etapas</button>
+          <button @click="pantallaSeleccionada = 'turnos'" class="btn btn-sm" :class="pantallaSeleccionada === 'turnos' ? 'btn-dark' : 'btn-outline-dark'">Turnos</button>
+          <button @click="pantallaSeleccionada = 'departamentos'" class="btn btn-sm" :class="pantallaSeleccionada === 'departamentos' ? 'btn-dark' : 'btn-outline-dark'">Deptos</button>
+          <button @click="pantallaSeleccionada = 'roles'" class="btn btn-sm" :class="pantallaSeleccionada === 'roles' ? 'btn-dark' : 'btn-outline-dark'">Roles</button>
+        </template>
       </div>
-    </nav>
 
-    <main class="py-4">
-      <Credenciales v-if="pantallaActual === 'credenciales'" />
-      <Profesores v-if="pantallaActual === 'profesores'" />
-      <Alumnos v-if="pantallaActual === 'alumnos'" />
-      <Cursos v-if="pantallaActual === 'cursos'" />
-      <Espacios v-if="pantallaActual === 'espacios'" />
-      <Estados v-if="pantallaActual === 'estados'" />
-      <Etapas v-if="pantallaActual === 'etapas'" />
-      <Turnos v-if="pantallaActual === 'turnos'" />
-      <Departamentos v-if="pantallaActual === 'departamentos'" />
-      <Roles v-if="pantallaActual === 'roles'" />
+      <main class="py-4">
+        <div v-if="pantallaSeleccionada === 'incidencias'" class="container text-center mt-5">
+          <h3 class="text-secondary">Sección de Crear Incidencias (Acceso global)</h3>
+        </div>
+        
+        <div v-if="pantallaSeleccionada === 'reservas'" class="container text-center mt-5">
+          <h3 class="text-secondary">Sección de Reservas (Acceso parcial)</h3>
+        </div>
 
-    </main>
+        <div v-if="pantallaSeleccionada === 'resolver'" class="container text-center mt-5">
+          <h3 class="text-secondary">Sección de Resolución de Incidencias (Acceso restringido)</h3>
+        </div>
+
+        <Credenciales v-if="pantallaSeleccionada === 'credenciales'" />
+        <Profesores v-if="pantallaSeleccionada === 'profesores'" />
+        <Alumnos v-if="pantallaSeleccionada === 'alumnos'" />
+        <Cursos v-if="pantallaSeleccionada === 'cursos'" />
+        <Espacios v-if="pantallaSeleccionada === 'espacios'" />
+        <Estados v-if="pantallaSeleccionada === 'estados'" />
+        <Etapas v-if="pantallaSeleccionada === 'etapas'" />
+        <Turnos v-if="pantallaSeleccionada === 'turnos'" />
+        <Departamentos v-if="pantallaSeleccionada === 'departamentos'" />
+        <Roles v-if="pantallaSeleccionada === 'roles'" />
+      </main>
+    </div>
 
   </div>
 </template>
 
-<style>
-body {
-  margin: 0;
-  padding: 0;
-}
-
-#app {
-  width: 100%;
-  max-width: 100%;
-}
-</style>
+<script>
+export default {
+  data() {
+    return {
+      usuarioActual: null, 
+      pantallaSeleccionada: 'incidencias' 
+    };
+  },
+  // Evaluamos el rol del usuario para los v-if de los botones
+  computed: {
+    esAdmin() {
+      return this.usuarioActual && this.usuarioActual.rol === 'Administrador';
+    },
+    esTic() {
+      return this.usuarioActual && this.usuarioActual.rol === 'Responsable TIC';
+    },
+    esProfesor() {
+      return this.usuarioActual && this.usuarioActual.rol === 'Profesor';
+    },
+    esAlumno() {
+      return this.usuarioActual && this.usuarioActual.rol === 'Alumno';
+    }
+  },
+  methods: {
+    gestionarEntrada(datosRecibidos) {
+      // Almacenamos la info que nos pasa el servidor desde Login.vue
+      this.usuarioActual = {
+        usuario: datosRecibidos.usuario,
+        rol: datosRecibidos.rol,
+        nombre: datosRecibidos.nombre,
+        apellidos: datosRecibidos.apellidos
+      };
+      
+      this.pantallaSeleccionada = 'incidencias'; // Pantalla inicial
+    },
+    cerrarSesion() {
+      // Vaciamos variables y devolvemos al usuario al Login
+      this.usuarioActual = null;
+      localStorage.removeItem('zusuario_guardado');
+    }
+  }
+};
+</script>

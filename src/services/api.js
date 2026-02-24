@@ -1,93 +1,103 @@
 // src/services/api.js
 
-// Definimos la IP del servidor del profesor
-const API_URL = 'http://100.52.46.68:3000';
+// Nueva IP del servidor para el Sprint 3
+const DIRECCION_API = 'http://100.27.173.196:3000';
 
-class ApiService {
+class ServicioApi {
 
-  // --- OBTENER DATOS (GET) ---
-  // Recibe el nombre de la tabla (endpoint) y devuelve el array de datos
   async getAll(endpoint) {
     try {
-      // Usamos await para esperar a que el servidor responda
-      const response = await fetch(`${API_URL}/${endpoint}`);
+      let url = `${DIRECCION_API}/${endpoint}`;
       
-      // Fetch no lanza error en 404 o 500, así que compruebo manualmente si fue bien
-      if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status}`);
+      // Si tenemos un zusuario guardado, lo mandamos por la URL para filtrar
+      const miZusuario = localStorage.getItem('zusuario_guardado');
+      if (miZusuario) {
+        url = `${url}?zusuario=${miZusuario}`;
       }
 
-      // Convertimos la respuesta "cruda" a formato JSON usable
-      const data = await response.json();
-      return data;
+      const respuesta = await fetch(url);
+      
+      if (!respuesta.ok) {
+        throw new Error(`Error del servidor: ${respuesta.status}`);
+      }
+
+      const datos = await respuesta.json();
+      return datos;
     } catch (error) {
-      console.error(`Error cargando ${endpoint}:`, error);
-      return []; // Devuelvo array vacío para evitar fallos en la vista
+      console.error(`Error al cargar datos de ${endpoint}:`, error);
+      alert(`No se han podido cargar los datos de ${endpoint}. Revisa la consola.`);
+      return []; 
     }
   }
 
-  // --- CREAR DATOS (POST) ---
-  async create(endpoint, data) {
+  async create(endpoint, datos) {
     try {
-      const response = await fetch(`${API_URL}/${endpoint}`, {
-        method: 'POST', // Indicamos que vamos a guardar datos
-        headers: {
-          'Content-Type': 'application/json' // Avisamos al servidor que enviamos JSON
-        },
-        body: JSON.stringify(data) // Convertimos el objeto JS a texto plano para enviarlo
-      });
-
-      if (!response.ok) {
-        throw new Error(`Fallo al crear: ${response.statusText}`);
+      // Inyectamos el zusuario antes de guardar para dejar registro de quién lo hizo
+      const miZusuario = localStorage.getItem('zusuario_guardado');
+      if (miZusuario) {
+        datos.zusuario = miZusuario;
       }
 
-      return true; // Retorno true para saber en la vista que todo salió bien
-    } catch (error) {
-      alert("Error al guardar: " + error.message);
-      return false;
-    }
-  }
-
-  // --- ACTUALIZAR DATOS (PUT) ---
-  // Necesitamos el ID para saber qué registro modificar
-  async update(endpoint, id, data) {
-    try {
-      const response = await fetch(`${API_URL}/${endpoint}/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(data)
+      const respuesta = await fetch(`${DIRECCION_API}/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(datos)
       });
 
-      if (!response.ok) {
-        throw new Error(`Fallo al actualizar: ${response.statusText}`);
+      if (!respuesta.ok) {
+        throw new Error('Fallo al guardar en la base de datos');
       }
 
       return true;
     } catch (error) {
-      alert("Error al actualizar: " + error.message);
+      console.error("Error al crear registro:", error);
+      alert("Error al intentar guardar los datos. Revisa la consola para más detalles.");
       return false;
     }
   }
 
-  // --- BORRAR DATOS (DELETE) ---
+  async update(endpoint, id, datos) {
+    try {
+      const miZusuario = localStorage.getItem('zusuario_guardado');
+      if (miZusuario) {
+        datos.zusuario = miZusuario;
+      }
+
+      const respuesta = await fetch(`${DIRECCION_API}/${endpoint}/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(datos)
+      });
+
+      if (!respuesta.ok) {
+        throw new Error('Fallo al actualizar');
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Error al modificar registro:", error);
+      alert("Error al intentar actualizar los datos.");
+      return false;
+    }
+  }
+
   async delete(endpoint, id) {
     try {
-      const response = await fetch(`${API_URL}/${endpoint}/${id}`, {
-        method: 'DELETE' // No necesita body ni headers, solo la URL con el ID
+      const respuesta = await fetch(`${DIRECCION_API}/${endpoint}/${id}`, {
+        method: 'DELETE'
       });
 
-      if (!response.ok) {
-        throw new Error(`Fallo al borrar: ${response.statusText}`);
+      if (!respuesta.ok) {
+        throw new Error('Fallo al borrar');
       }
 
       return true;
     } catch (error) {
-      alert("Error al eliminar: " + error.message);
+      console.error("Error al borrar registro:", error);
+      alert("Error al intentar borrar el registro. Es posible que esté en uso.");
       return false;
     }
   }
 }
 
-export default new ApiService();
+export default new ServicioApi();
