@@ -1,6 +1,7 @@
 <script setup>
-import { ref } from 'vue';
-import Login from './components/Acceso.vue';
+// Importaciones limpias y directas. 
+// El nombre que pones aquí es la etiqueta que usarás en el <template>
+import Acceso from './components/Acceso.vue';
 import Profesores from './components/Profesores.vue';
 import Alumnos from './components/Alumnos.vue';
 import Cursos from './components/Cursos.vue';
@@ -11,7 +12,10 @@ import Turnos from './components/Turnos.vue';
 import Departamentos from './components/Departamentos.vue';
 import Roles from './components/Roles.vue';
 import Credenciales from './components/Credenciales.vue'; 
-import Acceso from './components/Acceso.vue';
+import Reservas from './components/Reservas.vue';
+import CrearIncidencia from './components/CrearIncidencia.vue';
+import ResolucionIncidencias from './components/ResolucionIncidencias.vue';
+import Horarios from './components/Horarios.vue';
 </script>
 
 <template>
@@ -37,7 +41,7 @@ import Acceso from './components/Acceso.vue';
           Crear Incidencia
         </button>
 
-        <button v-if="esProfesor || esTic || esAdmin" @click="pantallaSeleccionada = 'reservas'" class="btn" :class="pantallaSeleccionada === 'reservas' ? 'btn-primary' : 'btn-outline-primary'">
+        <button @click="pantallaSeleccionada = 'reservas'" class="btn" :class="pantallaSeleccionada === 'reservas' ? 'btn-primary' : 'btn-outline-primary'">
           Reserva de Espacios
         </button>
 
@@ -57,21 +61,15 @@ import Acceso from './components/Acceso.vue';
           <button @click="pantallaSeleccionada = 'turnos'" class="btn btn-sm" :class="pantallaSeleccionada === 'turnos' ? 'btn-dark' : 'btn-outline-dark'">Turnos</button>
           <button @click="pantallaSeleccionada = 'departamentos'" class="btn btn-sm" :class="pantallaSeleccionada === 'departamentos' ? 'btn-dark' : 'btn-outline-dark'">Deptos</button>
           <button @click="pantallaSeleccionada = 'roles'" class="btn btn-sm" :class="pantallaSeleccionada === 'roles' ? 'btn-dark' : 'btn-outline-dark'">Roles</button>
+          <button @click="pantallaSeleccionada = 'horarios'" class="btn btn-sm" :class="pantallaSeleccionada === 'horarios' ? 'btn-dark' : 'btn-outline-dark'">Horarios</button>
         </template>
       </div>
 
       <main class="py-4">
-        <div v-if="pantallaSeleccionada === 'incidencias'" class="container text-center mt-5">
-          <h3 class="text-secondary">Sección de Crear Incidencias (Acceso global)</h3>
-        </div>
+        <CrearIncidencia v-if="pantallaSeleccionada === 'incidencias'" />       
+        <Reservas v-if="pantallaSeleccionada === 'reservas'" />
         
-        <div v-if="pantallaSeleccionada === 'reservas'" class="container text-center mt-5">
-          <h3 class="text-secondary">Sección de Reservas (Acceso parcial)</h3>
-        </div>
-
-        <div v-if="pantallaSeleccionada === 'resolver'" class="container text-center mt-5">
-          <h3 class="text-secondary">Sección de Resolución de Incidencias (Acceso restringido)</h3>
-        </div>
+        <ResolucionIncidencias v-if="pantallaSeleccionada === 'resolver'" />
 
         <Credenciales v-if="pantallaSeleccionada === 'credenciales'" />
         <Profesores v-if="pantallaSeleccionada === 'profesores'" />
@@ -83,6 +81,7 @@ import Acceso from './components/Acceso.vue';
         <Turnos v-if="pantallaSeleccionada === 'turnos'" />
         <Departamentos v-if="pantallaSeleccionada === 'departamentos'" />
         <Roles v-if="pantallaSeleccionada === 'roles'" />
+        <Horarios v-if="pantallaSeleccionada === 'horarios'" />
       </main>
     </div>
 
@@ -97,7 +96,6 @@ export default {
       pantallaSeleccionada: 'incidencias' 
     };
   },
-  // Evaluamos el rol del usuario para los v-if de los botones
   computed: {
     esAdmin() {
       return this.usuarioActual && this.usuarioActual.rol === 'Administrador';
@@ -114,7 +112,6 @@ export default {
   },
   methods: {
     gestionarEntrada(datosRecibidos) {
-      // Almacenamos la info que nos pasa el servidor desde Login.vue
       this.usuarioActual = {
         usuario: datosRecibidos.usuario,
         rol: datosRecibidos.rol,
@@ -122,10 +119,9 @@ export default {
         apellidos: datosRecibidos.apellidos
       };
       
-      this.pantallaSeleccionada = 'incidencias'; // Pantalla inicial
+      this.pantallaSeleccionada = 'incidencias';
     },
     cerrarSesion() {
-      // Vaciamos variables y devolvemos al usuario al Login
       this.usuarioActual = null;
       localStorage.removeItem('zusuario_guardado');
     }

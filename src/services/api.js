@@ -1,7 +1,7 @@
 // src/services/api.js
 
 // Nueva IP del servidor para el Sprint 3
-const DIRECCION_API = 'http://100.27.173.196:3000';
+const DIRECCION_API = 'http://44.207.19.239:3000';
 
 class ServicioApi {
 
@@ -83,18 +83,17 @@ class ServicioApi {
 
   async delete(endpoint, id) {
     try {
-      const respuesta = await fetch(`${DIRECCION_API}/${endpoint}/${id}`, {
+      const respuesta = await fetch(`${DIRECCION_API}/${endpoint}/${id}?zusuario=david.romo`, {
         method: 'DELETE'
       });
-
+      
       if (!respuesta.ok) {
-        throw new Error('Fallo al borrar');
+        console.error("Error en servidor al intentar borrar");
+        return false;
       }
-
       return true;
     } catch (error) {
-      console.error("Error al borrar registro:", error);
-      alert("Error al intentar borrar el registro. Es posible que esté en uso.");
+      console.error("Fallo de red al borrar:", error);
       return false;
     }
   }

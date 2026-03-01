@@ -7,26 +7,21 @@
             <h4 class="mb-0">Acceso a Escarlatti-Gest</h4>
           </div>
           <div class="card-body p-4">
-            
             <form @submit.prevent="iniciarSesion">
               <div class="mb-3">
                 <label class="form-label fw-bold">Usuario (Login)</label>
                 <input v-model="formulario.login" type="text" class="form-control" placeholder="Ej: romo.admin" required>
               </div>
-              
               <div class="mb-3">
                 <label class="form-label fw-bold">Contraseña</label>
                 <input v-model="formulario.password" type="password" class="form-control" required>
               </div>
-              
               <div class="mb-4">
                 <label class="form-label fw-bold">Zusuario</label>
                 <input v-model="formulario.zusuario" type="text" class="form-control" placeholder="Ej: david.romo" required>
               </div>
-              
               <button type="submit" class="btn btn-primary w-100 fw-bold">Entrar al Sistema</button>
             </form>
-            
           </div>
         </div>
       </div>
@@ -35,54 +30,77 @@
 </template>
 
 <script>
+import api from '../services/api';
+
 export default {
   data() {
     return {
-      // ESTO ES LO QUE ENVIAMOS AL SERVIDOR. 
-      // Tiene que coincidir exactamente con lo que te pedía el alert.
-      formulario: {
-        login: '',     
-        password: '',
-        zusuario: '' 
-      }
+      formulario: { login: '', password: '', zusuario: '' },
+      intentosFallidos: {} 
     };
   },
   methods: {
     async iniciarSesion() {
+      const loginActual = this.formulario.login;
+      // Guardamos zusuario para las peticiones de la API
+      localStorage.setItem('zusuario_guardado', this.formulario.zusuario);
+
       try {
-        const respuesta = await fetch('http://100.27.173.196:3000/auth/login', {
+        let todosLosUsuarios = await api.getAll('usuarios') || [];
+        let usuarioVerificar = todosLosUsuarios.find(u => u.login === loginActual);
+
+        // Verificamos si la cuenta está bloqueada o de baja
+        if (usuarioVerificar && usuarioVerificar.estado_id !== 'ACT_DR') {
+           let motivo = usuarioVerificar.estado_id === 'BAJA_DR' ? 'se encuentra de BAJA' : 'está BLOQUEADA por seguridad';
+           alert(`ACCESO DENEGADO: La cuenta '${loginActual}' ${motivo}.`);
+           return; 
+        }
+
+        const respuesta = await fetch('http://44.207.19.239:3000/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          // Convertimos el formulario a JSON y lo enviamos
           body: JSON.stringify(this.formulario)
         });
 
         const datos = await respuesta.json();
 
-        // Si la respuesta del servidor no es OK (ej: 401 Unauthorized)
         if (!respuesta.ok) {
-           let mensajeAlerta = datos.error || "Error al intentar acceder";
-           
-           // Si el servidor nos da un motivo (ej: usuario bloqueado), lo añadimos al mensaje
-           if (datos.motivo) {
-             mensajeAlerta += " - " + datos.motivo;
+           if (!this.intentosFallidos[loginActual]) this.intentosFallidos[loginActual] = 0;
+           this.intentosFallidos[loginActual]++;
+
+           if (this.intentosFallidos[loginActual] >= 3) {
+             await this.bloquearCuentaSeguridad(loginActual);
+             alert(`ATENCIÓN: Cuenta '${loginActual}' bloqueada por seguridad tras 3 intentos fallidos.`);
+             return;
            }
-           
-           console.error("Fallo de autenticación:", datos);
-           alert(mensajeAlerta);
-           return; // Cortamos aquí para que no intente entrar
+           alert(`Credenciales incorrectas. Te quedan ${3 - this.intentosFallidos[loginActual]} intentos.`);
+           return; 
         }
 
-        // Si llegamos aquí, el login fue un éxito. Guardamos el zusuario en memoria.
-        localStorage.setItem('zusuario_guardado', this.formulario.zusuario);
+        // GUARDAMOS DATOS DE SESIÓN
+        localStorage.setItem('usuario_login', loginActual);
+        localStorage.setItem('rol_id', usuarioVerificar.rol_id); 
 
-        // Le decimos a App.vue que nos deje pasar y le damos los datos del usuario
+        this.intentosFallidos[loginActual] = 0;
         this.$emit('acceso-concedido', datos);
 
       } catch (error) {
-        console.error("Fallo grave de red:", error);
-        alert("No se ha podido conectar con el servidor. Verifica tu conexión a internet o si la IP ha cambiado.");
+        console.error(error);
+        alert("Error de conexión con el servidor.");
       }
+    },
+
+    async bloquearCuentaSeguridad(login) {
+      try {
+        let todos = await api.getAll('usuarios') || [];
+        let u = todos.find(x => x.login === login);
+        if (u) {
+          u.estado_id = 'BLOQ_DR';
+          if (u.zfecha) u.zfecha = u.zfecha.substring(0, 10);
+          u.zusuario = localStorage.getItem('zusuario_guardado');
+          await api.update('usuarios', login, u);
+        }
+      } catch (e) { console.error("Fallo al bloquear usuario", e); }
     }
   }
 };

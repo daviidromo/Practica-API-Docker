@@ -10,15 +10,26 @@
       
       <form @submit.prevent="guardar">
         <div class="row g-3 align-items-end">
+
+          <div class="col-md-2">
+            <label class="form-label fw-bold">ID (Ej: A223_DR)</label>
+            <input v-model="formulario.id" type="text" class="form-control" placeholder="ID único" required :disabled="estoyEditando">
+          </div>
           
-          <div class="col-md-3">
+          <div class="col-md-2">
             <label class="form-label fw-bold">Nombre</label>
             <input v-model="formulario.nombre" type="text" class="form-control" placeholder="Ej: Aula 103" required>
           </div>
 
           <div class="col-md-2">
             <label class="form-label fw-bold">Ubicación</label>
-            <input v-model="formulario.ubicacion_planta" type="text" class="form-control" placeholder="Ej: Planta Baja" required>
+            <select v-model="formulario.ubicacion_planta" class="form-select" required>
+              <option value="" disabled>Seleccione...</option>
+              <option value="Planta baja">Planta baja</option>
+              <option value="Planta 1">Planta 1</option>
+              <option value="Planta 2">Planta 2</option>
+              <option value="Espacio Exterior">Espacio Exterior</option>
+            </select>
           </div>
 
           <div class="col-md-2">
@@ -26,23 +37,25 @@
             <input v-model="formulario.capacidad_max" type="number" class="form-control" placeholder="30" required>
           </div>
 
-          <div class="col-md-3">
+          <div class="col-md-2">
             <label class="form-label fw-bold">Equipamiento</label>
-            <input v-model="formulario.equipamiento" type="text" class="form-control" placeholder="Ej: Proyector, Pizarra">
+            <input v-model="formulario.equipamiento" type="text" class="form-control" placeholder="Ej: Proyector">
           </div>
 
           <div class="col-md-2">
             <label class="form-label fw-bold">Estado</label>
-            <select v-model="formulario.estado_operativo" class="form-select">
-              <option value="true">Operativo</option>
-              <option value="false">No Operativo</option>
+            <select v-model="formulario.estado_operativo" class="form-select" required>
+              <option value="OP">Operativo</option>
+              <option value="MAN">Mantenimiento</option>
+              <option value="AVE">Averiado</option>
+              <option value="CLAU">Clausurado</option>
             </select>
           </div>
           
           <div class="col-md-12 mt-3 d-flex justify-content-end gap-2">
             <button type="submit" class="btn fw-bold px-4" :class="estoyEditando ? 'btn-warning' : 'btn-success'">
               <span v-if="estoyEditando">Actualizar</span>
-              <span v-else>Crear</span>
+              <span v-else>Crear Espacio</span>
             </button>
             
             <button v-if="estoyEditando" @click="cancelar" type="button" class="btn btn-secondary px-4">
@@ -74,8 +87,11 @@
           <td>{{ espacio.capacidad_max }}</td>
           <td>{{ espacio.equipamiento }}</td>
           <td>
-            <span v-if="espacio.estado_operativo === 'true'" class="badge bg-success">Operativo</span>
-            <span v-else class="badge bg-danger">No Operativo</span>
+            <span v-if="espacio.estado_operativo === 'OP'" class="badge bg-success">Operativo</span>
+            <span v-else-if="espacio.estado_operativo === 'MAN'" class="badge bg-warning text-dark">Mantenimiento</span>
+            <span v-else-if="espacio.estado_operativo === 'AVE'" class="badge bg-danger">Averiado</span>
+            <span v-else-if="espacio.estado_operativo === 'CLAU'" class="badge bg-dark">Clausurado</span>
+            <span v-else class="badge bg-secondary">{{ espacio.estado_operativo }}</span>
           </td>
           <td>
             <button @click="cargarDatosEnFormulario(espacio)" class="btn btn-warning btn-sm me-2">Editar</button>
@@ -93,97 +109,70 @@ import api from '../services/api';
 export default {
   data() {
     return {
-      listaDeEspacios: [], // Aquí guardo lo que viene del servidor
-      estoyEditando: false, // Para saber si crear o actualizar
+      listaDeEspacios: [], 
+      estoyEditando: false, 
       formulario: { 
-        id: null, 
+        id: '', 
         nombre: '', 
         ubicacion_planta: '',
         capacidad_max: '', 
         equipamiento: '',
-        estado_operativo: 'true' // Valor por defecto
+        estado_operativo: 'OP', 
+        zusuario: 'david.romo'
       }
     };
   },
   
   async mounted() {
-    // Al iniciar, cargamos la lista
     await this.cargarTodo();
   },
 
   methods: {
     async cargarTodo() {
-      // Pido los datos a la tabla 'espacios'
       this.listaDeEspacios = await api.getAll('espacios');
     },
 
     async guardar() {
-      // Hago una copia de los datos para enviarlos
       let datosParaEnviar = { ...this.formulario };
 
-      if (this.estoyEditando === false) {
-        // --- MODO CREAR ---
-        // Tengo que calcular el ID yo mismo porque el servidor no es autoincremental
-        
-        let idMasAlto = 0;
-        
-        // Recorro toda la lista para encontrar el número más alto
-        if (this.listaDeEspacios.length > 0) {
-           for (let i = 0; i < this.listaDeEspacios.length; i++) {
-             let espacio = this.listaDeEspacios[i];
-             let numero = parseInt(espacio.id); // Lo convierto a número
-             
-             if (numero > idMasAlto) {
-               idMasAlto = numero;
-             }
-           }
-        }
-        
-        // El nuevo ID será el más alto + 1
-        datosParaEnviar.id = (idMasAlto + 1).toString();
-        
-        // Lo guardamos en la base de datos
-        await api.create('espacios', datosParaEnviar); 
-
-      } else {
-        // --- MODO EDITAR ---
-        // Actualizamos usando el ID que ya tiene
+      if (this.estoyEditando) {
         await api.update('espacios', datosParaEnviar.id, datosParaEnviar);
+      } else {
+        await api.create('espacios', datosParaEnviar); 
       }
 
-      this.cancelar(); // Limpio el formulario
-      
-      // Espero medio segundo y recargo la tabla para ver los cambios
+      this.cancelar(); 
       setTimeout(async () => { 
         await this.cargarTodo(); 
       }, 500);
     },
 
     cargarDatosEnFormulario(espacio) {
-      // Relleno el formulario con los datos de la fila que he clickado
-      this.formulario = { ...espacio };
-      this.estoyEditando = true; // Cambio el botón a "Actualizar"
+      this.formulario = { ...espacio, zusuario: 'david.romo' };
+      this.estoyEditando = true; 
     },
 
     cancelar() {
-      // Dejo el formulario vacío y limpio
       this.formulario = { 
-        id: null, 
+        id: '', 
         nombre: '', 
         ubicacion_planta: '',
         capacidad_max: '', 
         equipamiento: '',
-        estado_operativo: 'true'
+        estado_operativo: 'OP',
+        zusuario: 'david.romo'
       };
       this.estoyEditando = false;
     },
 
     async borrarEspacio(id) {
-      let seguro = confirm('¿Seguro que quieres borrar este espacio?');
-      
-      if (seguro) {
-        await api.delete('espacios', id);
-        await this.cargarTodo();
+      if (confirm('¿Seguro que quieres borrar este espacio?')) {
+        let exito = await api.delete('espacios', id);
+        if (exito) {
+          await this.cargarTodo();
+        } else {
+          alert("No se puede borrar este espacio porque tiene reservas o incidencias asociadas.");
+        }
       }
     }
   }

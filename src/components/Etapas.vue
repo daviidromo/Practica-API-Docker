@@ -11,52 +11,49 @@
       <form @submit.prevent="guardar">
         <div class="row g-3 align-items-end">
           
-          <div class="col-md-4">
+          <div class="col-md-3">
+            <label class="form-label fw-bold">ID (Ej: ESO_DR)</label>
+            <input v-model="formulario.id" type="text" class="form-control" required :disabled="editando">
+          </div>
+
+          <div class="col-md-3">
             <label class="form-label fw-bold">Nombre</label>
             <input v-model="formulario.nombre" type="text" class="form-control" placeholder="Ej: ESO" required>
           </div>
 
-          <div class="col-md-5">
+          <div class="col-md-4">
             <label class="form-label fw-bold">Descripción</label>
-            <input v-model="formulario.descripcion" type="text" class="form-control" placeholder="Escribe una breve descripción">
+            <input v-model="formulario.descripcion" type="text" class="form-control">
           </div>
           
-          <div class="col-md-3 d-flex gap-2">
+          <div class="col-md-2 d-flex gap-2">
             <button type="submit" class="btn w-100 fw-bold" :class="editando ? 'btn-warning' : 'btn-success'">
-              <span v-if="editando">Actualizar</span>
-              <span v-else>Añadir</span>
+              {{ editando ? 'Actualizar' : 'Registrar' }}
             </button>
-            
-            <button v-if="editando" @click="limpiarTodo" type="button" class="btn btn-secondary">
-              X
-            </button>
+            <button v-if="editando" @click="limpiarTodo" type="button" class="btn btn-secondary">X</button>
           </div>
         </div>
       </form>
     </div>
 
-    <h5 class="mb-3">Etapas registradas</h5>
-    <table class="table table-striped table-hover border">
+    <h5 class="mb-3">Etapas Definidas</h5>
+    <table class="table table-striped table-hover border text-center">
       <thead class="table-dark">
         <tr>
           <th>ID</th>
-          <th>Nombre de la Etapa</th>
+          <th>Nombre</th>
           <th>Descripción</th>
           <th>Acciones</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="item in listaEtapas" :key="item.id">
-          <td>{{ item.id || 'N/A' }}</td>
+          <td><span class="badge bg-secondary">{{ item.id }}</span></td>
           <td>{{ item.nombre }}</td>
           <td>{{ item.descripcion }}</td>
           <td>
-            <button @click="prepararEdicion(item)" class="btn btn-warning btn-sm me-2">
-              Editar
-            </button>
-            <button @click="eliminarEtapa(item.id)" class="btn btn-danger btn-sm">
-              Borrar
-            </button>
+            <button @click="prepararEdicion(item)" class="btn btn-warning btn-sm me-2">Editar</button>
+            <button @click="eliminarEtapa(item.id)" class="btn btn-danger btn-sm">Borrar</button>
           </td>
         </tr>
       </tbody>
@@ -71,86 +68,66 @@ export default {
   data() {
     return {
       listaEtapas: [], 
+      listaCursos: [], // Necesario para comprobar la integridad
       editando: false,
-      formulario: {
-        id: null,
-        nombre: '',
-        descripcion: ''
-      }
+      formulario: { id: '', nombre: '', descripcion: '', zusuario: 'david.romo' }
     };
   },
-  
-  async mounted() {
-    // Al cargar la página, pedimos los datos
-    await this.cargarDatos();
+  async mounted() { 
+    await this.cargarDatos(); 
   },
-
   methods: {
-    async cargarDatos() {
-      // Intentamos traer los datos del servidor
-      const resultado = await api.getAll('etapas');
-      
-      // Si el servidor nos devuelve algo, lo guardamos
-      if (resultado) {
-        this.listaEtapas = resultado;
-      }
+    async cargarDatos() { 
+      // Cargamos etapas y cursos para la validación
+      this.listaEtapas = await api.getAll('etapas') || []; 
+      this.listaCursos = await api.getAll('cursos') || [];
     },
 
     async guardar() {
-      // Hacemos una copia de los datos para trabajar con ellos
-      let datosAEnviar = { ...this.formulario };
+      // Limpieza de zfecha si existiera para evitar Error 500
+      let datos = { ...this.formulario };
+      if (datos.zfecha) datos.zfecha = datos.zfecha.substring(0, 10);
 
-      if (this.editando) {
-        // --- MODO EDITAR ---
-        // Mandamos la actualización al servidor (H8 CA2)
-        await api.update('etapas', datosAEnviar.id, datosAEnviar);
-      } else {
-        // --- MODO CREAR ---
-        // Calculamos el ID más alto para el nuevo registro
-        let idMasAlto = 0;
-        for (let i = 0; i < this.listaEtapas.length; i++) {
-          let idActual = parseInt(this.listaEtapas[i].id);
-          // Si el ID no es un número (como el "" que tenías), lo ignoramos
-          if (!isNaN(idActual) && idActual > idMasAlto) {
-            idMasAlto = idActual;
-          }
+      try {
+        if (this.editando) {
+          await api.update('etapas', datos.id, datos);
+        } else {
+          await api.create('etapas', datos);      
         }
-        
-        // El nuevo ID es el más alto + 1
-        datosAEnviar.id = (idMasAlto + 1).toString();
-        
-        await api.create('etapas', datosAEnviar);      
+        this.limpiarTodo();
+        await this.cargarDatos();
+      } catch (error) {
+        console.error("Error al guardar etapa:", error);
       }
-      
-      this.limpiarTodo();
-      
-      // Esperamos un poquito y recargamos la lista
-      setTimeout(async () => { 
-        await this.cargarDatos(); 
-      }, 500);
     },
 
     prepararEdicion(etapa) {
-      // Ponemos los datos de la fila en el formulario de arriba
-      this.formulario = { ...etapa };
+      this.formulario = { ...etapa, zusuario: 'david.romo' };
       this.editando = true;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     },
 
     limpiarTodo() {
-      // Vaciamos el formulario y volvemos al modo "Crear"
-      this.formulario = { id: null, nombre: '', descripcion: '' };
+      this.formulario = { id: '', nombre: '', descripcion: '', zusuario: 'david.romo' };
       this.editando = false;
     },
 
     async eliminarEtapa(id) {
-      if (confirm('¿Quieres eliminar esta etapa?')) {
-        // El sistema no permitirá borrar si hay cursos vinculados (H8 CA1)
-        const exito = await api.delete('etapas', id);
-        
-        if (exito) {
+      // VALIDACIÓN DE INTEGRIDAD REFERENCIAL
+      const tieneCursos = this.listaCursos.some(curso => curso.etapa_id === id);
+
+      if (tieneCursos) {
+        alert(`No se puede eliminar la etapa '${id}' porque existen cursos asociados a ella. Debes eliminar o reasignar los cursos primero.`);
+        return;
+      }
+
+      if (confirm(`¿Estás seguro de que deseas eliminar la etapa ${id}?`)) {
+        try {
+          await api.delete('etapas', id);
           await this.cargarDatos();
-        } else {
-          alert("Error: No se puede borrar. Comprueba si hay cursos usando esta etapa.");
+        } catch (error) {
+          alert("Error técnico al intentar borrar.");
+          console.error(error);
         }
       }
     }

@@ -11,8 +11,13 @@
       <form @submit.prevent="guardar">
         <div class="row g-3 align-items-end">
           
-          <div class="col-md-9">
-            <label class="form-label fw-bold">Nombre del Área (Ej: Informática)</label>
+          <div class="col-md-3">
+            <label class="form-label fw-bold">ID (Ej: MAT_DR)</label>
+            <input v-model="formulario.id" type="text" class="form-control" placeholder="ID único" required :disabled="estoyEditando">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label fw-bold">Nombre del Área (Ej: Matemáticas)</label>
             <input v-model="formulario.nombre" type="text" class="form-control" placeholder="Escribe aquí el nombre..." required>
           </div>
           
@@ -66,58 +71,49 @@ export default {
       listaDeDepartamentos: [], 
       estoyEditando: false,
       formulario: {
-        id: null,
-        nombre: ''
+        id: '',
+        nombre: '',
+        zusuario: 'david.romo' // FUNDAMENTAL: Tu firma para que la API te deje guardar
       }
     };
   },
   
   async mounted() {
-    // Cargamos los datos al empezar
     await this.cargarDatos();
   },
 
   methods: {
     async cargarDatos() {
-      // Pedimos la lista al servidor
       this.listaDeDepartamentos = await api.getAll('departamentos');
     },
 
     async guardar() {
-      if (this.estoyEditando == true) {
-        // Si estamos editando, actualizamos el que ya existe
-        await api.update('departamentos', this.formulario.id, this.formulario);
+      let datosParaEnviar = { ...this.formulario };
+
+      if (this.estoyEditando) {
+        // Modo Editar
+        await api.update('departamentos', datosParaEnviar.id, datosParaEnviar);
       } else {
-        // Si es nuevo, buscamos el ID más alto y le sumamos 1
-        let elIdMasAlto = 0;
-        for (let i = 0; i < this.listaDeDepartamentos.length; i++) {
-          let idActual = parseInt(this.listaDeDepartamentos[i].id);
-          if (idActual > elIdMasAlto) {
-            elIdMasAlto = idActual;
-          }
-        }
-        this.formulario.id = (elIdMasAlto + 1).toString();
-        
-        await api.create('departamentos', this.formulario);      
+        // Modo Crear: Ya no calculamos el ID, mandamos el que has escrito en la casilla
+        await api.create('departamentos', datosParaEnviar);      
       }
       
       this.limpiarPantalla();
       
-      // Esperamos un poco para que el servidor se actualice y recargamos la tabla
       setTimeout(async () => { 
         await this.cargarDatos(); 
       }, 500);
     },
 
     prepararParaEditar(objeto) {
-      // Pasamos los datos de la fila al formulario de arriba
-      this.formulario = { ...objeto };
+      // Cargamos los datos, asegurando que no se pierda el zusuario
+      this.formulario = { ...objeto, zusuario: 'david.romo' };
       this.estoyEditando = true;
     },
 
     limpiarPantalla() {
-      // Dejamos el formulario como nuevo
-      this.formulario = { id: null, nombre: '' };
+      // Vaciamos pero mantenemos la firma
+      this.formulario = { id: '', nombre: '', zusuario: 'david.romo' };
       this.estoyEditando = false;
     },
 
@@ -128,7 +124,6 @@ export default {
         if (salioBien) {
           await this.cargarDatos();
         } else {
-          // Si el servidor no deja borrarlo (porque tiene profes), avisamos
           alert("No se puede borrar porque hay profesores en este departamento.");
         }
       }
