@@ -68,66 +68,80 @@ export default {
   data() {
     return {
       listaEtapas: [], 
-      listaCursos: [], // Necesario para comprobar la integridad
+      listaCursos: [], 
       editando: false,
       formulario: { id: '', nombre: '', descripcion: '', zusuario: 'david.romo' }
     };
   },
+
   async mounted() { 
+    // al cargar la pantalla traemos los datos de la bbdd
     await this.cargarDatos(); 
   },
+
   methods: {
     async cargarDatos() { 
-      // Cargamos etapas y cursos para la validación
-      this.listaEtapas = await api.getAll('etapas') || []; 
-      this.listaCursos = await api.getAll('cursos') || [];
+      try {
+        // obtenemos etapas y cursos para las validaciones
+        this.listaEtapas = await api.getAll('etapas') || []; 
+        this.listaCursos = await api.getAll('cursos') || [];
+      } catch (error) {
+        alert("Fallo en la bbdd al cargar las listas");
+      }
     },
 
     async guardar() {
-      // Limpieza de zfecha si existiera para evitar Error 500
+      // preparamos los datos y limpiamos la fecha para evitar el error 500
       let datos = { ...this.formulario };
-      if (datos.zfecha) datos.zfecha = datos.zfecha.substring(0, 10);
+      if (datos.zfecha) {
+        datos.zfecha = datos.zfecha.substring(0, 10);
+      }
 
       try {
         if (this.editando) {
+          // actualizamos la etapa existente
           await api.update('etapas', datos.id, datos);
         } else {
+          // creamos una etapa nueva
           await api.create('etapas', datos);      
         }
+        
         this.limpiarTodo();
         await this.cargarDatos();
       } catch (error) {
-        console.error("Error al guardar etapa:", error);
+        alert("Fallo en la bbdd al intentar guardar la etapa");
       }
     },
 
     prepararEdicion(etapa) {
+      // volcamos los datos de la tabla al formulario
       this.formulario = { ...etapa, zusuario: 'david.romo' };
       this.editando = true;
       window.scrollTo({ top: 0, behavior: 'smooth' });
     },
 
     limpiarTodo() {
+      // reseteamos el formulario a su estado inicial
       this.formulario = { id: '', nombre: '', descripcion: '', zusuario: 'david.romo' };
       this.editando = false;
     },
 
     async eliminarEtapa(id) {
-      // VALIDACIÓN DE INTEGRIDAD REFERENCIAL
+      // comprobamos que no existan cursos vinculados antes de borrar
       const tieneCursos = this.listaCursos.some(curso => curso.etapa_id === id);
 
       if (tieneCursos) {
-        alert(`No se puede eliminar la etapa '${id}' porque existen cursos asociados a ella. Debes eliminar o reasignar los cursos primero.`);
+        alert(`No se puede eliminar la etapa '${id}' porque existen cursos asociados a ella.`);
         return;
       }
 
       if (confirm(`¿Estás seguro de que deseas eliminar la etapa ${id}?`)) {
         try {
+          // borramos el registro de la bbdd
           await api.delete('etapas', id);
           await this.cargarDatos();
         } catch (error) {
-          alert("Error técnico al intentar borrar.");
-          console.error(error);
+          alert("Fallo en la bbdd al intentar borrar la etapa");
         }
       }
     }

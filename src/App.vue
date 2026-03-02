@@ -1,6 +1,5 @@
 <script setup>
-// Importaciones limpias y directas. 
-// El nombre que pones aquí es la etiqueta que usarás en el <template>
+// Importaciones directas de todos los componentes que forman la aplicacion
 import Acceso from './components/Acceso.vue';
 import Profesores from './components/Profesores.vue';
 import Alumnos from './components/Alumnos.vue';
@@ -24,6 +23,7 @@ import Horarios from './components/Horarios.vue';
     <Acceso v-if="usuarioActual === null" @acceso-concedido="gestionarEntrada" />
 
     <div v-else>
+      
       <nav class="navbar navbar-expand-lg navbar-dark bg-primary px-4 shadow">
         <a class="navbar-brand fw-bold" href="#">Escarlatti-Gest</a>
         
@@ -97,6 +97,7 @@ export default {
     };
   },
   computed: {
+    // Evaluaciones reactivas para saber los permisos de quien esta usando la app
     esAdmin() {
       return this.usuarioActual && this.usuarioActual.rol === 'Administrador';
     },
@@ -112,6 +113,7 @@ export default {
   },
   methods: {
     gestionarEntrada(datosRecibidos) {
+      // Guardamos la informacion del login y mostramos la pantalla por defecto
       this.usuarioActual = {
         usuario: datosRecibidos.usuario,
         rol: datosRecibidos.rol,
@@ -122,6 +124,7 @@ export default {
       this.pantallaSeleccionada = 'incidencias';
     },
     cerrarSesion() {
+      // Limpiamos las variables de entorno y eliminamos el rastro del navegador
       this.usuarioActual = null;
       localStorage.removeItem('zusuario_guardado');
     }

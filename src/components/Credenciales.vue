@@ -99,53 +99,81 @@ export default {
       }
     };
   },
+  
   async mounted() {
     await this.cargarDatos();
   },
+  
   methods: {
     async cargarDatos() {
-      this.listaUsuarios = await api.getAll('usuarios') || [];
-      this.listaRoles = await api.getAll('roles') || [];
+      try {
+        this.listaUsuarios = await api.getAll('usuarios') || [];
+        this.listaRoles = await api.getAll('roles') || [];
+      } catch (error) {
+        alert("Fallo en la bbdd al cargar usuarios y roles");
+      }
     },
+
     prepararEdicion(usuario) {
-      this.formulario = { ...usuario, password_hash: '' };
+      // vaciamos la contraseña para no arrastrar la encriptada
+      this.formulario = { ...usuario, password_hash: '', zusuario: 'david.romo' };
       this.esEdicion = true;
       window.scrollTo({ top: 0, behavior: 'smooth' });
     },
+
     limpiarFormulario() {
-      this.formulario = { login: '', password_hash: '', rol_id: '', ref_identidad_fk: '', estado_id: 'ACT_DR', zusuario: 'david.romo' };
+      this.formulario = { 
+        login: '', password_hash: '', rol_id: '', ref_identidad_fk: '', 
+        estado_id: 'ACT_DR', zusuario: 'david.romo' 
+      };
       this.esEdicion = false;
     },
+
     async guardarUsuario() {
       let datosParaEnviar = { ...this.formulario };
-      // Limpieza de fechas para evitar Error 500
+      
+      // limpiamos fechas para evitar el error 500 al hacer update
       if (datosParaEnviar.zfecha) datosParaEnviar.zfecha = datosParaEnviar.zfecha.substring(0, 10);
       if (datosParaEnviar.ultimo_acceso) datosParaEnviar.ultimo_acceso = datosParaEnviar.ultimo_acceso.substring(0, 10);
 
       try {
         if (this.esEdicion) {
           await api.update('usuarios', datosParaEnviar.login, datosParaEnviar);
-          // Sincronización con Alumnos si el rol es ALUM_DR
+          
+          // si modificamos un alumno, sincronizamos su estado en la tabla alumnos
           if (datosParaEnviar.rol_id === 'ALUM_DR') {
             let todosAlumnos = await api.getAll('alumnos') || [];
             let alumnoVinculado = todosAlumnos.find(a => a.nia === datosParaEnviar.ref_identidad_fk);
+            
             if (alumnoVinculado) {
               alumnoVinculado.estado_id = datosParaEnviar.estado_id;
-              if (alumnoVinculado.zfecha) alumnoVinculado.zfecha = alumnoVinculado.zfecha.substring(0, 10);
+              
+              if (alumnoVinculado.zfecha) {
+                alumnoVinculado.zfecha = alumnoVinculado.zfecha.substring(0, 10);
+              }
               await api.update('alumnos', alumnoVinculado.nia, alumnoVinculado);
             }
           }
         } else {
           await api.create('usuarios', datosParaEnviar);
         }
+        
         this.limpiarFormulario();
         await this.cargarDatos();
       } catch (error) {
-        console.error(error);
+        alert("Fallo en la bbdd al guardar o sincronizar el usuario");
       }
     },
+
     async borrarUsuario(login) {
-      if (confirm('¿Borrar cuenta?')) { await api.delete('usuarios', login); await this.cargarDatos(); }
+      if (confirm('¿Seguro que quieres borrar esta cuenta?')) { 
+        try {
+          await api.delete('usuarios', login); 
+          await this.cargarDatos(); 
+        } catch (error) {
+          alert("Fallo en la bbdd al borrar la cuenta de usuario");
+        }
+      }
     }
   }
 };

@@ -42,26 +42,75 @@
 
 <script>
 import api from '../services/api';
+
 export default {
   data() {
     return {
-      listaRoles: [], editando: false,
+      listaRoles: [], 
+      editando: false,
       formulario: { id: '', nombre: '', zusuario: 'david.romo' }
     };
   },
-  async mounted() { await this.cargarRoles(); },
+
+  async mounted() { 
+    // Cargamos los datos al iniciar la pantalla
+    await this.cargarRoles(); 
+  },
+
   methods: {
-    async cargarRoles() { this.listaRoles = await api.getAll('roles'); },
-    async guardar() {
-      if (this.editando) { await api.update('roles', this.formulario.id, this.formulario); }
-      else { await api.create('roles', this.formulario); }
-      this.limpiar();
-      setTimeout(async () => { await this.cargarRoles(); }, 500);
+    async cargarRoles() { 
+      try {
+        // Obtenemos la lista de roles desde la base de datos
+        this.listaRoles = await api.getAll('roles') || []; 
+      } catch (error) {
+        alert("Fallo en la bbdd al cargar los roles");
+      }
     },
-    prepararEdicion(rol) { this.formulario = { ...rol, zusuario: 'david.romo' }; this.editando = true; },
-    limpiar() { this.formulario = { id: '', nombre: '', zusuario: 'david.romo' }; this.editando = false; },
+
+    async guardar() {
+      // Recortamos la fecha si existe para evitar el error 500 al actualizar
+      if (this.formulario.zfecha) {
+        this.formulario.zfecha = this.formulario.zfecha.substring(0, 10);
+      }
+
+      try {
+        // Evaluamos si actualizamos un registro o creamos uno nuevo
+        if (this.editando) { 
+          await api.update('roles', this.formulario.id, this.formulario); 
+        } else { 
+          await api.create('roles', this.formulario); 
+        }
+        
+        // Limpiamos el formulario y recargamos los datos tras medio segundo
+        this.limpiar();
+        setTimeout(async () => { await this.cargarRoles(); }, 500);
+      } catch (error) {
+        alert("Fallo en la bbdd al intentar guardar el rol");
+      }
+    },
+
+    prepararEdicion(rol) { 
+      // Cargamos el rol seleccionado en las casillas
+      this.formulario = { ...rol, zusuario: 'david.romo' }; 
+      this.editando = true; 
+    },
+
+    limpiar() { 
+      // Devolvemos las variables a su estado vacío original
+      this.formulario = { id: '', nombre: '', zusuario: 'david.romo' }; 
+      this.editando = false; 
+    },
+
     async eliminar(id) {
-      if (confirm('¿Borrar rol?')) { await api.delete('roles', id); await this.cargarRoles(); }
+      // Pedimos confirmación obligatoria antes de ejecutar el borrado
+      if (confirm('¿Seguro que quieres borrar este rol?')) { 
+        try {
+          await api.delete('roles', id); 
+          await this.cargarRoles(); 
+        } catch (error) {
+          alert("Fallo en la bbdd al intentar borrar el rol");
+        }
+      }
     }
   }
 };

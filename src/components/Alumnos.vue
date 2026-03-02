@@ -101,67 +101,135 @@ import api from '../services/api';
 export default {
   data() {
     return {
-      listaAlumnos: [], listaCursos: [], estoyEditando: false, textoBuscador: '',
-      formulario: { nia: '', nombre: '', apellidos: '', curso_id: '', correo_electronico: '', tutor_legal_contacto: '', estado_id: 'ACT_DR', zusuario: 'david.romo' }
+      listaAlumnos: [], 
+      listaCursos: [], 
+      estoyEditando: false, 
+      textoBuscador: '',
+      formulario: { 
+        nia: '', 
+        nombre: '', 
+        apellidos: '', 
+        curso_id: '', 
+        correo_electronico: '', 
+        tutor_legal_contacto: '', 
+        estado_id: 'ACT_DR', 
+        zusuario: 'david.romo' 
+      }
     };
   },
+
   computed: {
     alumnosFiltrados() {
       if (!this.textoBuscador) return this.listaAlumnos;
-      const b = this.textoBuscador.toLowerCase();
-      return this.listaAlumnos.filter(a => 
-        String(a.nia).toLowerCase().includes(b) || 
-        a.apellidos.toLowerCase().includes(b) || 
-        String(a.curso_id).toLowerCase().includes(b)
+      const busqueda = this.textoBuscador.toLowerCase();
+      
+      return this.listaAlumnos.filter(alumno => 
+        (alumno.nia && String(alumno.nia).toLowerCase().includes(busqueda)) || 
+        (alumno.apellidos && alumno.apellidos.toLowerCase().includes(busqueda)) || 
+        (alumno.curso_id && String(alumno.curso_id).toLowerCase().includes(busqueda))
       );
     }
   },
-  async mounted() { await this.cargarTodo(); },
+
+  async mounted() { 
+    await this.cargarTodo(); 
+  },
+
   methods: {
     async cargarTodo() {
-      this.listaAlumnos = await api.getAll('alumnos') || [];
-      this.listaCursos = await api.getAll('cursos') || [];
+      try {
+        this.listaAlumnos = await api.getAll('alumnos') || [];
+        this.listaCursos = await api.getAll('cursos') || [];
+      } catch (error) {
+        alert("Fallo en la bbdd al cargar las listas");
+      }
     },
+
     async guardar() {
       let datosParaEnviar = { ...this.formulario };
-      if (datosParaEnviar.zfecha) datosParaEnviar.zfecha = datosParaEnviar.zfecha.substring(0, 10);
+      
+      // arregla el error 500 recortando la fecha
+      if (datosParaEnviar.zfecha) {
+        datosParaEnviar.zfecha = datosParaEnviar.zfecha.substring(0, 10);
+      }
 
       try {
         if (this.estoyEditando) {
-          // 1. Actualizamos al Alumno
+          // actualizamos al alumno
           await api.update('alumnos', datosParaEnviar.nia, datosParaEnviar);
 
-          // 2. SINCRONIZACIÓN: Buscamos su usuario para cambiarle el estado también
-          let todosUsuarios = await api.getAll('usuarios') || [];
-          let usuarioVinculado = todosUsuarios.find(u => u.ref_identidad_fk === datosParaEnviar.nia);
+          // sincronizamos buscando su usuario para cambiarle el estado tambien
+          let todosLosUsuarios = await api.getAll('usuarios') || [];
+          let usuarioVinculado = todosLosUsuarios.find(usuario => usuario.ref_identidad_fk === datosParaEnviar.nia);
           
           if (usuarioVinculado) {
             usuarioVinculado.estado_id = datosParaEnviar.estado_id;
-            // Limpieza de fechas para evitar Error 500 en Usuarios
-            if (usuarioVinculado.zfecha) usuarioVinculado.zfecha = usuarioVinculado.zfecha.substring(0, 10);
-            if (usuarioVinculado.ultimo_acceso) usuarioVinculado.ultimo_acceso = usuarioVinculado.ultimo_acceso.substring(0, 10);
+            
+            // recortamos fechas para evitar error 500 en usuarios
+            if (usuarioVinculado.zfecha) {
+              usuarioVinculado.zfecha = usuarioVinculado.zfecha.substring(0, 10);
+            }
+            if (usuarioVinculado.ultimo_acceso) {
+              usuarioVinculado.ultimo_acceso = usuarioVinculado.ultimo_acceso.substring(0, 10);
+            }
             
             await api.update('usuarios', usuarioVinculado.login, usuarioVinculado);
           }
         } else {
-          // ALTA NUEVA (se mantiene igual)
+          // alta nueva de alumno
           await api.create('alumnos', datosParaEnviar);
-          let loginGen = `${datosParaEnviar.nombre.toLowerCase()}.${datosParaEnviar.apellidos.toLowerCase().replace(/\s/g, '')}`;
-          await api.create('usuarios', { 
-            login: loginGen, password_hash: '1234', rol_id: 'ALUM_DR', 
-            ref_identidad_fk: datosParaEnviar.nia, estado_id: 'ACT_DR', zusuario: 'david.romo' 
-          });
+          
+          // creamos automaticamente el login uniendo nombre y apellidos
+          let loginGenerado = `${datosParaEnviar.nombre.toLowerCase()}.${datosParaEnviar.apellidos.toLowerCase().replace(/\s/g, '')}`;
+          let nuevoUsuario = { 
+            login: loginGenerado, 
+            password_hash: '1234', 
+            rol_id: 'ALUM_DR', 
+            ref_identidad_fk: datosParaEnviar.nia, 
+            estado_id: 'ACT_DR', 
+            zusuario: 'david.romo' 
+          };
+          
+          await api.create('usuarios', nuevoUsuario);
         }
+        
         this.cancelar();
         setTimeout(async () => { await this.cargarTodo(); }, 500);
       } catch (error) {
-        console.error("Error en la sincronización:", error);
+        alert("Fallo en la bbdd al guardar o sincronizar");
       }
     },
     
-    cargarDatos(alumno) { this.formulario = { ...alumno, zusuario: 'david.romo' }; this.estoyEditando = true; window.scrollTo({ top: 0, behavior: 'smooth' }); },
-    cancelar() { this.formulario = { nia: '', nombre: '', apellidos: '', curso_id: '', correo_electronico: '', tutor_legal_contacto: '', estado_id: 'ACT_DR', zusuario: 'david.romo' }; this.estoyEditando = false; },
-    async borrar(nia) { if (confirm('¿Seguro que quieres borrar a este alumno?')) { await api.delete('alumnos', nia); await this.cargarTodo(); } }
+    cargarDatos(alumno) { 
+      this.formulario = { ...alumno, zusuario: 'david.romo' }; 
+      this.estoyEditando = true; 
+      window.scrollTo({ top: 0, behavior: 'smooth' }); 
+    },
+
+    cancelar() { 
+      this.formulario = { 
+        nia: '', 
+        nombre: '', 
+        apellidos: '', 
+        curso_id: '', 
+        correo_electronico: '', 
+        tutor_legal_contacto: '', 
+        estado_id: 'ACT_DR', 
+        zusuario: 'david.romo' 
+      }; 
+      this.estoyEditando = false; 
+    },
+
+    async borrar(nia) { 
+      if (confirm('¿Seguro que quieres borrar a este alumno?')) { 
+        try {
+          await api.delete('alumnos', nia); 
+          await this.cargarTodo(); 
+        } catch (error) {
+          alert("Fallo en la bbdd al borrar el alumno");
+        }
+      } 
+    }
   }
 };
 </script>

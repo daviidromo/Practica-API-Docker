@@ -154,64 +154,83 @@ export default {
   
   computed: {
     plantasDisponibles() {
-      const plantas = this.listaEspaciosOperativos.map(e => e.ubicacion_planta).filter(Boolean);
-      return [...new Set(plantas)]; 
+      // Obtenemos solo los nombres de las plantas para rellenar el desplegable
+      const listaPlantas = this.listaEspaciosOperativos.map(espacio => espacio.ubicacion_planta).filter(Boolean);
+      return [...new Set(listaPlantas)]; 
     },
     espaciosDelCuadrante() {
+      // Filtramos las aulas para mostrar solo las que pertenecen a la planta elegida
       if (!this.filtroPlanta) return [];
-      return this.listaEspaciosOperativos.filter(e => e.ubicacion_planta === this.filtroPlanta);
+      return this.listaEspaciosOperativos.filter(espacio => espacio.ubicacion_planta === this.filtroPlanta);
     }
   },
 
   async mounted() {
     await this.cargarTodo();
     this.formulario.usuario_login = this.loginUsuario;
-    if (this.plantasDisponibles.length > 0) this.filtroPlanta = this.plantasDisponibles[0];
+    if (this.plantasDisponibles.length > 0) {
+      this.filtroPlanta = this.plantasDisponibles[0];
+    }
   },
 
   methods: {
     async cargarTodo() {
-      this.listaReservas = await api.getAll('reservas') || [];
-      let todos = await api.getAll('espacios') || [];
-      this.listaEspaciosOperativos = todos.filter(e => e.estado_operativo === 'OP');
-      let h = await api.getAll('horarios') || [];
-      this.listaHorarios = h.sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
+      try {
+        this.listaReservas = await api.getAll('reservas') || [];
+        
+        // Obtenemos los espacios y filtramos solo los operativos
+        let todosLosEspacios = await api.getAll('espacios') || [];
+        this.listaEspaciosOperativos = todosLosEspacios.filter(espacio => espacio.estado_operativo === 'OP');
+        
+        // Obtenemos los horarios y los ordenamos por hora de inicio
+        let todosLosHorarios = await api.getAll('horarios') || [];
+        this.listaHorarios = todosLosHorarios.sort((horarioA, horarioB) => horarioA.hora_inicio.localeCompare(horarioB.hora_inicio));
+      } catch (error) {
+        alert("Fallo en la bbdd al cargar los datos del cuadrante");
+      }
     },
 
     puedeGestionar(reserva) {
+      // Verificamos si el usuario es dueño de la reserva o si es administrador
       if (this.rolUsuario === 'ADMIN_DR') return true;
       return reserva.usuario_login === this.loginUsuario;
     },
 
     estiloCelda(reserva) {
+      // Pintamos de verde la celda si la reserva es nuestra, o rojo si es de otra persona
       const esMia = reserva.usuario_login === this.loginUsuario;
-      const gestionable = this.puedeGestionar(reserva);
+      const esGestionable = this.puedeGestionar(reserva);
       return {
         backgroundColor: esMia ? '#d4edda' : '#f8d7da',
         border: `1px solid ${esMia ? '#c3e6cb' : '#f5c6cb'}`,
         color: esMia ? '#155724' : '#721c24',
-        cursor: gestionable ? 'pointer' : 'not-allowed'
+        cursor: esGestionable ? 'pointer' : 'not-allowed'
       };
     },
 
-    cambiarDia(dias) {
-      let fecha = new Date(this.filtroFecha);
-      fecha.setDate(fecha.getDate() + dias);
-      this.filtroFecha = fecha.toISOString().substring(0, 10);
+    cambiarDia(diasASumar) {
+      // Navegamos por el calendario sumando o restando dias
+      let fechaCalculada = new Date(this.filtroFecha);
+      fechaCalculada.setDate(fechaCalculada.getDate() + diasASumar);
+      this.filtroFecha = fechaCalculada.toISOString().substring(0, 10);
     },
     
-    diaActual() { this.filtroFecha = new Date().toISOString().substring(0, 10); },
+    diaActual() { 
+      this.filtroFecha = new Date().toISOString().substring(0, 10); 
+    },
 
     obtenerReservaCuadrante(espacio_id, horario_id) {
+      // Buscamos la reserva que coincide exactamente con la celda de la tabla
       let fechaBuscada = this.formatearParaAPI(this.filtroFecha);
-      return this.listaReservas.find(r => 
-        r.espacio_id === espacio_id && 
-        r.horario_id == horario_id && 
-        this.formatearParaTabla(r.fecha_reserva) === fechaBuscada
+      return this.listaReservas.find(reserva => 
+        reserva.espacio_id === espacio_id && 
+        reserva.horario_id == horario_id && 
+        this.formatearParaTabla(reserva.fecha_reserva) === fechaBuscada
       );
     },
 
     seleccionarHueco(espacio_id, horario_id) {
+      // Rellenamos el formulario automáticamente al pulsar en un hueco libre
       this.cancelar(); 
       this.formulario.espacio_id = espacio_id;
       this.formulario.horario_id = horario_id;
@@ -219,68 +238,81 @@ export default {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     },
 
-    formatearParaAPI(f) {
-      if (!f) return "";
-      const p = f.substring(0, 10).split('-');
-      return `${p[2]}/${p[1]}/${p[0]}`;
+    formatearParaAPI(fechaHtml) {
+      if (!fechaHtml) return "";
+      const partesFecha = fechaHtml.substring(0, 10).split('-');
+      return `${partesFecha[2]}/${partesFecha[1]}/${partesFecha[0]}`;
     },
 
-    formatearParaHTML(f) {
-      if (!f) return "";
-      if (f.includes('T')) return f.substring(0, 10);
-      const p = f.split('/');
-      return p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : f;
+    formatearParaHTML(fechaApi) {
+      if (!fechaApi) return "";
+      if (fechaApi.includes('T')) return fechaApi.substring(0, 10);
+      const partesFecha = fechaApi.split('/');
+      return partesFecha.length === 3 ? `${partesFecha[2]}-${partesFecha[1]}-${partesFecha[0]}` : fechaApi;
     },
 
-    formatearParaTabla(f) {
-      if (!f) return "";
-      let p = f.substring(0,10).split(f.includes('-') ? '-' : '/');
-      return f.includes('-') ? `${p[2]}/${p[1]}/${p[0]}` : f;
+    formatearParaTabla(fechaGuardada) {
+      if (!fechaGuardada) return "";
+      let partesFecha = fechaGuardada.substring(0,10).split(fechaGuardada.includes('-') ? '-' : '/');
+      return fechaGuardada.includes('-') ? `${partesFecha[2]}/${partesFecha[1]}/${partesFecha[0]}` : fechaGuardada;
     },
 
     async guardar() {
+      // Validamos que el usuario introduzca un motivo real
       if (this.formulario.motivo_reserva.length < 10) {
         alert("Error: El motivo debe tener al menos 10 caracteres.");
         return; 
       }
 
-      let fechaComp = this.formatearParaAPI(this.formulario.fecha_reserva);
-      let conflicto = this.listaReservas.some(r => 
-        r.espacio_id === this.formulario.espacio_id && 
-        this.formatearParaTabla(r.fecha_reserva) === fechaComp && 
-        r.horario_id == this.formulario.horario_id && 
-        r.id !== this.formulario.id
+      let fechaComparar = this.formatearParaAPI(this.formulario.fecha_reserva);
+      
+      // Comprobamos que el hueco no haya sido reservado por otra persona
+      let hayConflicto = this.listaReservas.some(reserva => 
+        reserva.espacio_id === this.formulario.espacio_id && 
+        this.formatearParaTabla(reserva.fecha_reserva) === fechaComparar && 
+        reserva.horario_id == this.formulario.horario_id && 
+        reserva.id !== this.formulario.id
       );
 
-      if (conflicto) {
+      if (hayConflicto) {
         alert("Este espacio ya está reservado en este horario.");
         return; 
       }
 
-      let datos = { ...this.formulario };
-      if (datos.zfecha) datos.zfecha = datos.zfecha.substring(0, 10);
+      let datosParaEnviar = { ...this.formulario };
+      
+      // Limpiamos la fecha para evitar el error de formato del servidor
+      if (datosParaEnviar.zfecha) {
+        datosParaEnviar.zfecha = datosParaEnviar.zfecha.substring(0, 10);
+      }
 
       try {
         if (this.estoyEditando) {
-          await api.update('reservas', datos.id, datos);
+          await api.update('reservas', datosParaEnviar.id, datosParaEnviar);
         } else {
-          delete datos.id;
-          await api.create('reservas', datos); 
+          delete datosParaEnviar.id;
+          await api.create('reservas', datosParaEnviar); 
         }
+        
         this.cancelar(); 
         await this.cargarTodo(); 
-      } catch (error) { console.error(error); }
+      } catch (error) { 
+        alert("Fallo en la bbdd al intentar guardar la reserva"); 
+      }
     },
 
-    cargarDatos(reserva) {
-      if (!this.puedeGestionar(reserva)) return;
-      this.formulario = { ...reserva, zusuario: 'david.romo' };
-      this.formulario.fecha_reserva = this.formatearParaHTML(reserva.fecha_reserva);
+    cargarDatos(reservaSeleccionada) {
+      // Verificamos permisos antes de cargar los datos para editar
+      if (!this.puedeGestionar(reservaSeleccionada)) return;
+      
+      this.formulario = { ...reservaSeleccionada, zusuario: 'david.romo' };
+      this.formulario.fecha_reserva = this.formatearParaHTML(reservaSeleccionada.fecha_reserva);
       this.estoyEditando = true; 
       window.scrollTo({ top: 0, behavior: 'smooth' });
     },
 
     cancelar() {
+      // Devolvemos el formulario a su estado vacío original
       this.formulario = { 
         id: null, espacio_id: '', horario_id: '', 
         usuario_login: this.loginUsuario, fecha_reserva: this.filtroFecha, 
@@ -289,11 +321,16 @@ export default {
       this.estoyEditando = false;
     },
 
-    async borrar(id) {
+    async borrar(id_reserva) {
+      // Pedimos confirmación antes de eliminar permanentemente la reserva
       if (confirm('¿Seguro que quieres CANCELAR y eliminar definitivamente esta reserva?')) {
-        await api.delete('reservas', id);
-        this.cancelar();
-        await this.cargarTodo();
+        try {
+          await api.delete('reservas', id_reserva);
+          this.cancelar();
+          await this.cargarTodo();
+        } catch (error) {
+          alert("Fallo en la bbdd al intentar borrar la reserva");
+        }
       }
     }
   }

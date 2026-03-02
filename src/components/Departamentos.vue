@@ -73,7 +73,7 @@ export default {
       formulario: {
         id: '',
         nombre: '',
-        zusuario: 'david.romo' // FUNDAMENTAL: Tu firma para que la API te deje guardar
+        zusuario: 'david.romo'
       }
     };
   },
@@ -84,47 +84,58 @@ export default {
 
   methods: {
     async cargarDatos() {
-      this.listaDeDepartamentos = await api.getAll('departamentos');
+      try {
+        this.listaDeDepartamentos = await api.getAll('departamentos') || [];
+      } catch (error) {
+        alert("Fallo en la bbdd al cargar los departamentos");
+      }
     },
 
     async guardar() {
       let datosParaEnviar = { ...this.formulario };
 
-      if (this.estoyEditando) {
-        // Modo Editar
-        await api.update('departamentos', datosParaEnviar.id, datosParaEnviar);
-      } else {
-        // Modo Crear: Ya no calculamos el ID, mandamos el que has escrito en la casilla
-        await api.create('departamentos', datosParaEnviar);      
+      // recortamos la fecha para evitar error 500
+      if (datosParaEnviar.zfecha) {
+        datosParaEnviar.zfecha = datosParaEnviar.zfecha.substring(0, 10);
       }
-      
-      this.limpiarPantalla();
-      
-      setTimeout(async () => { 
-        await this.cargarDatos(); 
-      }, 500);
+
+      try {
+        if (this.estoyEditando) {
+          await api.update('departamentos', datosParaEnviar.id, datosParaEnviar);
+        } else {
+          await api.create('departamentos', datosParaEnviar);      
+        }
+        
+        this.limpiarPantalla();
+        setTimeout(async () => { await this.cargarDatos(); }, 500);
+      } catch (error) {
+        alert("Fallo en la bbdd al guardar el departamento");
+      }
     },
 
     prepararParaEditar(objeto) {
-      // Cargamos los datos, asegurando que no se pierda el zusuario
       this.formulario = { ...objeto, zusuario: 'david.romo' };
       this.estoyEditando = true;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     },
 
     limpiarPantalla() {
-      // Vaciamos pero mantenemos la firma
       this.formulario = { id: '', nombre: '', zusuario: 'david.romo' };
       this.estoyEditando = false;
     },
 
     async borrar(idABorrar) {
       if (confirm('¿Seguro que quieres eliminar este departamento?')) {
-        let salioBien = await api.delete('departamentos', idABorrar);
-        
-        if (salioBien) {
-          await this.cargarDatos();
-        } else {
-          alert("No se puede borrar porque hay profesores en este departamento.");
+        try {
+          let salioBien = await api.delete('departamentos', idABorrar);
+          
+          if (salioBien) {
+            await this.cargarDatos();
+          } else {
+            alert("Fallo en la bbdd: no se puede borrar porque hay profesores asignados");
+          }
+        } catch (error) {
+          alert("Fallo en la bbdd al intentar borrar el departamento");
         }
       }
     }

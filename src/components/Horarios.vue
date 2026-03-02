@@ -101,25 +101,33 @@ export default {
 
   methods: {
     async cargarTodo() {
-      // Ordenamos la lista por hora de inicio para que se vea bien en la tabla
-      let horarios = await api.getAll('horarios') || [];
-      this.listaHorarios = horarios.sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
-      
-      this.listaTurnos = await api.getAll('turnos') || [];
+      try {
+        // obtenemos horarios y los ordenamos por hora de inicio
+        let horarios = await api.getAll('horarios') || [];
+        this.listaHorarios = horarios.sort((a, b) => a.hora_inicio.localeCompare(b.hora_inicio));
+        
+        this.listaTurnos = await api.getAll('turnos') || [];
+      } catch (error) {
+        alert("Fallo en la bbdd al cargar la lista de horarios");
+      }
     },
 
     async guardar() {
       let datosParaEnviar = { ...this.formulario };
 
-      if (this.estoyEditando) {
-        await api.update('horarios', datosParaEnviar.id, datosParaEnviar);
-      } else {
-        delete datosParaEnviar.id;
-        await api.create('horarios', datosParaEnviar); 
-      }
+      try {
+        if (this.estoyEditando) {
+          await api.update('horarios', datosParaEnviar.id, datosParaEnviar);
+        } else {
+          delete datosParaEnviar.id;
+          await api.create('horarios', datosParaEnviar); 
+        }
 
-      this.cancelar(); 
-      setTimeout(async () => { await this.cargarTodo(); }, 500);
+        this.cancelar(); 
+        setTimeout(async () => { await this.cargarTodo(); }, 500);
+      } catch (error) {
+        alert("Fallo en la bbdd al intentar guardar el horario");
+      }
     },
 
     cargarDatos(horario) {
@@ -134,10 +142,14 @@ export default {
       this.estoyEditando = false;
     },
 
-    async borrar(id) {
+    async borrar(id_horario) {
       if (confirm('¿Seguro que quieres borrar este horario?')) {
-        await api.delete('horarios', id);
-        await this.cargarTodo();
+        try {
+          await api.delete('horarios', id_horario);
+          await this.cargarTodo();
+        } catch (error) {
+          alert("Fallo en la bbdd al intentar borrar el registro");
+        }
       }
     }
   }

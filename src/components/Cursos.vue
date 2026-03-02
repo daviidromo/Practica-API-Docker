@@ -171,11 +171,15 @@ export default {
 
   methods: {
     async cargarTodo() {
-      this.listaCursos = await api.getAll('cursos') || [];
-      this.listaProfesores = await api.getAll('profesores') || [];
-      this.listaEtapas = await api.getAll('etapas') || [];
-      this.listaTurnos = await api.getAll('turnos') || [];
-      this.listaAlumnos = await api.getAll('alumnos') || [];
+      try {
+        this.listaCursos = await api.getAll('cursos') || [];
+        this.listaProfesores = await api.getAll('profesores') || [];
+        this.listaEtapas = await api.getAll('etapas') || [];
+        this.listaTurnos = await api.getAll('turnos') || [];
+        this.listaAlumnos = await api.getAll('alumnos') || [];
+      } catch (error) {
+        alert("Fallo en la bbdd al cargar las listas");
+      }
     },
 
     obtenerNombreTutor(dni) {
@@ -186,14 +190,14 @@ export default {
 
     verAlumnos(curso) {
       this.cursoSeleccionado = curso;
-      // Scroll suave hasta la tabla de alumnos
+      // baja la pantalla suavemente hasta la tabla de alumnos
       setTimeout(() => {
         window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
       }, 100);
     },
 
     async guardar() {
-      // CA2: Validación de Tutoría
+      // comprueba si el profesor ya tiene otro curso asignado este año
       if (this.nuevo.tutor_id) {
         const yaEsTutor = this.listaCursos.some(c => 
           c.tutor_id === this.nuevo.tutor_id && 
@@ -210,7 +214,7 @@ export default {
       let datosParaEnviar = { ...this.nuevo };
       if (datosParaEnviar.tutor_id === '') datosParaEnviar.tutor_id = null;
       
-      // Limpieza de zfecha por si acaso para evitar Error 500
+      // limpiamos zfecha por si acaso para no romper el update
       delete datosParaEnviar.zfecha;
 
       try {
@@ -222,7 +226,7 @@ export default {
         this.cancelar();
         await this.cargarTodo();
       } catch (error) {
-        console.error("Error al guardar el curso", error);
+        alert("Fallo en la bbdd al guardar el curso");
       }
     },
 
@@ -243,7 +247,7 @@ export default {
     },
 
     async borrarCurso(id) {
-      // CA1: Integridad Referencial
+      // comprueba que el curso no tenga alumnos dentro antes de borrarlo
       const tieneAlumnos = this.listaAlumnos.some(a => a.curso_id === id);
       
       if (tieneAlumnos) {
@@ -252,8 +256,12 @@ export default {
       }
 
       if (confirm('¿Seguro que quieres borrar este curso?')) {
-        await api.delete('cursos', id);
-        await this.cargarTodo();
+        try {
+          await api.delete('cursos', id);
+          await this.cargarTodo();
+        } catch (error) {
+          alert("Fallo en la bbdd al borrar el curso");
+        }
       }
     }
   }

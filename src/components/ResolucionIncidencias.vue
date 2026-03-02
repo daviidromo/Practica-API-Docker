@@ -102,7 +102,7 @@ export default {
   },
   
   computed: {
-    // Filtramos la lista de usuarios para que el Admin solo pueda asignar incidencias a perfiles TIC (o a sí mismo)
+    // Filtramos la lista de usuarios para que el Admin solo pueda asignar incidencias a perfiles TIC o ADMIN
     usuariosTic() {
       return this.listaUsuarios.filter(u => u.rol_id === 'TIC_DR' || u.rol_id === 'ADMIN_DR');
     }
@@ -114,9 +114,13 @@ export default {
 
   methods: {
     async cargarTodo() {
-      this.listaIncidencias = await api.getAll('incidencias') || [];
-      this.listaUsuarios = await api.getAll('usuarios') || [];
-      this.listaEstadosIncidencia = await api.getAll('estados_incidencia') || [];
+      try {
+        this.listaIncidencias = await api.getAll('incidencias') || [];
+        this.listaUsuarios = await api.getAll('usuarios') || [];
+        this.listaEstadosIncidencia = await api.getAll('estados_incidencia') || [];
+      } catch (error) {
+        alert("Fallo en la bbdd al cargar los datos de las incidencias");
+      }
     },
 
     formatearFecha(fechaOriginal) {
@@ -131,12 +135,12 @@ export default {
     async guardarResolucion() {
       let esResuelta = this.formulario.estado_incidencia_id === 'RESUEL_DR';
 
+      // Obligamos a documentar la solución y forzamos el login del técnico si no estaba asignado
       if (esResuelta) {
         if (!this.formulario.comentarios_resolucion || this.formulario.comentarios_resolucion.trim() === '') {
           alert("Error: No puedes marcar una incidencia como RESUELTA sin escribir cómo la has solucionado.");
           return;
         }
-        // Si no tiene responsable asignado al resolverla, forzamos el login del usuario actual
         if (!this.formulario.responsable_resolucion_id) {
           this.formulario.responsable_resolucion_id = this.loginUsuario;
         }
@@ -147,7 +151,7 @@ export default {
       if (datosParaEnviar.responsable_resolucion_id === '') datosParaEnviar.responsable_resolucion_id = null;
       if (datosParaEnviar.comentarios_resolucion === '') datosParaEnviar.comentarios_resolucion = null;
 
-      // AUTOGENERAR FECHA DE RESOLUCIÓN SI ESTÁ RESUELTA
+      // Autogeneramos la fecha de resolución si se marca como terminada
       if (esResuelta) {
         const hoy = new Date();
         const año = hoy.getFullYear();
@@ -159,13 +163,18 @@ export default {
         datosParaEnviar.fecha_resolucion = null;
       }
 
-      // Limpieza de zfecha para evitar Error 500
+      // Limpieza de zfecha para evitar Error 500 en el backend
       if (datosParaEnviar.zfecha) datosParaEnviar.zfecha = datosParaEnviar.zfecha.substring(0, 10);
 
-      await api.update('incidencias', datosParaEnviar.id, datosParaEnviar);
-      
-      this.cancelar(); 
-      setTimeout(async () => { await this.cargarTodo(); }, 500);
+      try {
+        // Guardamos los cambios en la base de datos
+        await api.update('incidencias', datosParaEnviar.id, datosParaEnviar);
+        
+        this.cancelar(); 
+        setTimeout(async () => { await this.cargarTodo(); }, 500);
+      } catch (error) {
+        alert("Fallo en la bbdd al actualizar la incidencia");
+      }
     },
 
     cargarDatos(incidencia) {
@@ -180,24 +189,32 @@ export default {
 
       if (!this.formulario.comentarios_resolucion) this.formulario.comentarios_resolucion = '';
       this.estoyEditando = true; 
+      
+      // Subimos la pantalla suavemente hacia el formulario
       window.scrollTo({ top: 0, behavior: 'smooth' });
     },
 
     cancelar() {
+      // Ocultamos el formulario y vaciamos las variables temporales
       this.formulario = {};
       this.estoyEditando = false;
     },
 
     async borrar(id) {
-      // Doble validación de seguridad por si acaso
+      // Doble validación de seguridad para proteger el borrado
       if (this.rolUsuario !== 'ADMIN_DR') {
         alert("Operación denegada. Solo los administradores pueden borrar registros históricos.");
         return;
       }
 
+      // Solicitamos confirmación antes de la eliminación definitiva
       if (confirm('Atención: ¿Quieres borrar definitivamente esta incidencia de la base de datos?')) {
-        await api.delete('incidencias', id);
-        await this.cargarTodo();
+        try {
+          await api.delete('incidencias', id);
+          await this.cargarTodo();
+        } catch (error) {
+          alert("Fallo en la bbdd al intentar borrar la incidencia");
+        }
       }
     }
   }

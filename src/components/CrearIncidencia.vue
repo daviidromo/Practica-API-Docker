@@ -2,6 +2,16 @@
   <div class="container-fluid px-5 mt-4">
     <h2 class="text-primary mb-4">Reportar Incidencia</h2>
 
+    <div v-if="incidenciasRecientesResueltas.length > 0" class="mb-5">
+      <div v-for="alerta in incidenciasRecientesResueltas" :key="alerta.id" class="alert alert-success alert-dismissible shadow-sm border-success mb-3" role="alert">
+        <h5 class="alert-heading fw-bold">Incidencia Resuelta (ID: {{ alerta.id }})</h5>
+        <p>Tu avería reportada en el espacio <strong>{{ alerta.espacio_id }}</strong> ha sido solucionada por el equipo técnico.</p>
+        <hr>
+        <p class="mb-0"><strong>Solución técnica:</strong> {{ alerta.comentarios_resolucion }}</p>
+        <button type="button" class="btn-close" @click="marcarComoLeida(alerta.id)" aria-label="Close"></button>
+      </div>
+    </div>
+
     <div class="card p-4 bg-light mb-5 shadow-sm">
       <h5 class="mb-3">Informar de una nueva avería</h5>
       <form @submit.prevent="guardar">
@@ -10,7 +20,9 @@
             <label class="form-label fw-bold">Espacio Afectado</label>
             <select v-model="formulario.espacio_id" class="form-select" required>
               <option value="" disabled>Selecciona...</option>
-              <option v-for="e in listaEspacios" :key="e.id" :value="e.id">{{ e.nombre }}</option>
+              <option v-for="espacio in listaEspacios" :key="espacio.id" :value="espacio.id">
+                {{ espacio.nombre }}
+              </option>
             </select>
           </div>
           
@@ -31,7 +43,6 @@
     </div>
 
     <div v-if="mensajeBloqueo" class="alert alert-warning border-warning shadow-sm mb-4">
-      <i class="bi bi-exclamation-triangle-fill me-2"></i>
       <strong>Aviso de Seguridad:</strong> {{ mensajeBloqueo }}
     </div>
 
@@ -80,8 +91,11 @@ export default {
       listaUsuarios: [], 
       listaAlumnos: [],
       mensajeBloqueo: '',
-      // Extraemos el usuario logueado de la memoria del navegador
       loginUsuario: localStorage.getItem('usuario_login') || '',
+      
+      // cargamos las alertas que el usuario ya cerro
+      alertasOcultas: JSON.parse(localStorage.getItem('alertas_ocultas')) || [],
+      
       formulario: { 
         descripcion_problema: '', 
         espacio_id: '', 
@@ -91,56 +105,79 @@ export default {
       }
     };
   },
+  
   computed: {
-    // CAMBIO: Filtramos para que devuelva solo las del login del usuario activo
     listaMisIncidencias() {
       if (!this.loginUsuario) return [];
-      return this.listaIncidenciasTotales.filter(inc => inc.usuario_login === this.loginUsuario);
+      return this.listaIncidenciasTotales.filter(incidencia => incidencia.usuario_login === this.loginUsuario);
+    },
+    // busca incidencias resueltas que aun no se hayan descartado
+    incidenciasRecientesResueltas() {
+      return this.listaMisIncidencias.filter(incidencia => 
+        incidencia.estado_incidencia_id === 'RESUEL_DR' && 
+        !this.alertasOcultas.includes(incidencia.id)
+      );
     }
   },
+
   async mounted() { 
     await this.cargarTodo(); 
     this.formulario.usuario_login = this.loginUsuario;
   },
+
   methods: {
     async cargarTodo() {
-      this.listaIncidenciasTotales = await api.getAll('incidencias') || [];
-      this.listaEspacios = await api.getAll('espacios') || [];
-      this.listaUsuarios = await api.getAll('usuarios') || [];
-      this.listaAlumnos = await api.getAll('alumnos') || [];
-    },
-    formatearFecha(f) {
-      if (!f) return '';
-      if (f.includes('T') || f.includes('-')) {
-        let p = f.substring(0, 10).split('-');
-        if (p.length === 3) return `${p[2]}/${p[1]}/${p[0]}`;
+      try {
+        this.listaIncidenciasTotales = await api.getAll('incidencias') || [];
+        this.listaEspacios = await api.getAll('espacios') || [];
+        this.listaUsuarios = await api.getAll('usuarios') || [];
+        this.listaAlumnos = await api.getAll('alumnos') || [];
+      } catch (error) {
+        alert("Fallo en la bbdd al cargar los datos");
       }
-      return f;
     },
+    
+    // esconde la alerta y guarda su id en la memoria del navegador
+    marcarComoLeida(id_incidencia) {
+      this.alertasOcultas.push(id_incidencia);
+      localStorage.setItem('alertas_ocultas', JSON.stringify(this.alertasOcultas));
+    },
+
+    formatearFecha(fechaOriginal) {
+      if (!fechaOriginal) return '';
+      if (fechaOriginal.includes('T') || fechaOriginal.includes('-')) {
+        let partes = fechaOriginal.substring(0, 10).split('-');
+        if (partes.length === 3) return `${partes[2]}/${partes[1]}/${partes[0]}`;
+      }
+      return fechaOriginal;
+    },
+    
     async guardar() {
       this.mensajeBloqueo = '';
-      
-      // Aseguramos que el login que se envía sea estrictamente el conectado
       this.formulario.usuario_login = this.loginUsuario;
 
-      const u = this.listaUsuarios.find(x => x.login === this.loginUsuario);
+      const usuarioActual = this.listaUsuarios.find(usuario => usuario.login === this.loginUsuario);
 
-      if (u && u.rol_id === 'ALUM_DR') {
-        const alumno = this.listaAlumnos.find(a => a.nia === u.ref_identidad_fk);
-        if (alumno && alumno.estado_id !== 'ACT_DR') {
-          this.mensajeBloqueo = `Acceso denegado: No tienes permisos por estar en estado ${alumno.estado_id}.`;
-          alert("Los alumnos bloqueados o de baja no pueden crear incidencias.");
+      // revisamos si el alumno tiene permisos para reportar averias
+      if (usuarioActual && usuarioActual.rol_id === 'ALUM_DR') {
+        const alumnoRevisar = this.listaAlumnos.find(alumno => alumno.nia === usuarioActual.ref_identidad_fk);
+        if (alumnoRevisar && alumnoRevisar.estado_id !== 'ACT_DR') {
+          this.mensajeBloqueo = `Acceso denegado: No tienes permisos por estar en estado ${alumnoRevisar.estado_id}.`;
+          alert("Fallo de permisos: cuenta inactiva");
           return;
         }
       }
 
-      await api.create('incidencias', this.formulario);
-      
-      // Limpiamos los campos del formulario tras guardar con éxito
-      this.formulario.descripcion_problema = '';
-      this.formulario.espacio_id = '';
-      
-      setTimeout(async () => { await this.cargarTodo(); }, 500);
+      try {
+        await api.create('incidencias', this.formulario);
+        
+        this.formulario.descripcion_problema = '';
+        this.formulario.espacio_id = '';
+        
+        setTimeout(async () => { await this.cargarTodo(); }, 500);
+      } catch (error) {
+        alert("Fallo en la bbdd al insertar la incidencia");
+      }
     }
   }
 };

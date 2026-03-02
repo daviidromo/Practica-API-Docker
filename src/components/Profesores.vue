@@ -121,49 +121,54 @@ export default {
 
   methods: {
     async cargarTodo() {
-      this.listaProfesores = await api.getAll('profesores') || [];
-      this.listaDepartamentos = await api.getAll('departamentos') || [];
-      
-      let todosLosRoles = await api.getAll('roles') || [];
-      
-      // Filtramos para que no se pueda asignar el rol de alumno a un profesor
-      this.listaRoles = todosLosRoles.filter(rol => {
-        return rol.nombre && rol.nombre.toLowerCase() !== 'alumno';
-      });
+      try {
+        this.listaProfesores = await api.getAll('profesores') || [];
+        this.listaDepartamentos = await api.getAll('departamentos') || [];
+        
+        let todosLosRoles = await api.getAll('roles') || [];
+        
+        // filtramos para evitar que se asigne el rol de alumno a un profesor por accidente
+        this.listaRoles = todosLosRoles.filter(rol => {
+          return rol.nombre && rol.nombre.toLowerCase() !== 'alumno';
+        });
+      } catch (error) {
+        alert("Fallo en la bbdd al cargar las listas de datos");
+      }
     },
 
     async guardar() {
-      // ESTA ES LA LÍNEA QUE FALTABA
+      // preparamos los datos a enviar
       let datosParaEnviar = { ...this.formulario };
 
-      if (this.estoyEditando) {
-        // Actualizamos usando dni_nie
-        await api.update('profesores', datosParaEnviar.dni_nie, datosParaEnviar);
-      } else {
-        // 1. Creamos el profesor
-        await api.create('profesores', datosParaEnviar); 
-        
-        // 2. CREACIÓN AUTOMÁTICA DEL USUARIO
-        let loginGenerado = `${datosParaEnviar.nombre.toLowerCase()}.${datosParaEnviar.apellidos.toLowerCase().replace(/\s/g, '')}`;
-        
-        let nuevoUsuario = {
-          login: loginGenerado,
-          password_hash: '1234', 
-          rol_id: datosParaEnviar.rol_id, 
-          ref_identidad_fk: datosParaEnviar.dni_nie, // Enlace exacto con la BD
-          estado_id: 'ACT_DR', 
-          zusuario: 'david.romo'
-        };
-        
-        try {
+      try {
+        if (this.estoyEditando) {
+          // actualizamos usando el dni_nie como identificador
+          await api.update('profesores', datosParaEnviar.dni_nie, datosParaEnviar);
+        } else {
+          // creamos primero el registro del profesor
+          await api.create('profesores', datosParaEnviar); 
+          
+          // autogeneramos el login uniendo nombre y apellidos
+          let loginGenerado = `${datosParaEnviar.nombre.toLowerCase()}.${datosParaEnviar.apellidos.toLowerCase().replace(/\s/g, '')}`;
+          
+          let nuevoUsuario = {
+            login: loginGenerado,
+            password_hash: '1234', 
+            rol_id: datosParaEnviar.rol_id, 
+            ref_identidad_fk: datosParaEnviar.dni_nie, 
+            estado_id: 'ACT_DR', 
+            zusuario: 'david.romo'
+          };
+          
+          // creamos sus credenciales de acceso automaticamente
           await api.create('usuarios', nuevoUsuario);
-        } catch (error) {
-          console.error("Profesor creado, pero falló la creación de credenciales", error);
         }
-      }
 
-      this.cancelar(); 
-      setTimeout(async () => { await this.cargarTodo(); }, 500);
+        this.cancelar(); 
+        setTimeout(async () => { await this.cargarTodo(); }, 500);
+      } catch (error) {
+        alert("Fallo en la bbdd al intentar guardar el profesor o sus credenciales");
+      }
     },
 
     cargarDatos(profe) {
@@ -183,58 +188,62 @@ export default {
     async borrar(dni_nie) {
       if (!confirm('¿Seguro que quieres eliminar a este profesor del sistema?')) return;
 
-      let todosLosUsuarios = await api.getAll('usuarios') || [];
-      let usuarioDelProfe = todosLosUsuarios.find(u => u.ref_identidad_fk === dni_nie);
+      try {
+        let todosLosUsuarios = await api.getAll('usuarios') || [];
+        let usuarioDelProfe = todosLosUsuarios.find(u => u.ref_identidad_fk === dni_nie);
 
-      if (usuarioDelProfe) {
-        let todasLasReservas = await api.getAll('reservas') || [];
-        let reservasDelProfe = todasLasReservas.filter(r => r.usuario_login === usuarioDelProfe.login);
+        if (usuarioDelProfe) {
+          let todasLasReservas = await api.getAll('reservas') || [];
+          let reservasDelProfe = todasLasReservas.filter(r => r.usuario_login === usuarioDelProfe.login);
 
-        // CA2: Preguntamos qué hacer con sus reservas
-        if (reservasDelProfe.length > 0) {
-          let mensaje = `Este profesor tiene ${reservasDelProfe.length} reservas activas.\n\n` +
-                        `Elige una opción:\n` +
-                        `Escribe '1' para ELIMINAR sus reservas.\n` +
-                        `Escribe '2' para MANTENERLAS (pasarán a 'romo.admin').\n\n` +
-                        `Pulsa [Cancelar] para abortar y NO borrar al profesor.`;
-                        
-          let opcion = prompt(mensaje);
-          
-          if (opcion === '1') {
-            // Opción A: Cancelar y borrar las reservas
-            for (let reserva of reservasDelProfe) {
-              await api.delete('reservas', reserva.id);
+          // preguntamos que hacer con las reservas activas del profesor
+          if (reservasDelProfe.length > 0) {
+            let mensaje = `Este profesor tiene ${reservasDelProfe.length} reservas activas.\n\n` +
+                          `Elige una opción:\n` +
+                          `Escribe '1' para ELIMINAR sus reservas.\n` +
+                          `Escribe '2' para MANTENERLAS (pasarán a 'romo.admin').\n\n` +
+                          `Pulsa [Cancelar] para abortar y NO borrar al profesor.`;
+                          
+            let opcion = prompt(mensaje);
+            
+            if (opcion === '1') {
+              // cancelamos y borramos todas sus reservas
+              for (let reserva of reservasDelProfe) {
+                await api.delete('reservas', reserva.id);
+              }
+            } else if (opcion === '2') {
+              // reasignamos las reservas al administrador principal
+              for (let reserva of reservasDelProfe) {
+                 reserva.usuario_login = 'romo.admin'; 
+                 
+                 // recortamos la fecha para que el update no falle
+                 if (reserva.fecha_reserva && reserva.fecha_reserva.includes('T')) {
+                   reserva.fecha_reserva = reserva.fecha_reserva.substring(0, 10);
+                 }
+                 
+                 await api.update('reservas', reserva.id, reserva);
+              }
+            } else {
+              // abortamos la operacion si cancela el prompt
+              alert("Operación cancelada. El profesor y sus reservas están a salvo.");
+              return; 
             }
-          } else if (opcion === '2') {
-            // Opción B: Mantenerlas (Se las asignamos a tu usuario admin real)
-            for (let reserva of reservasDelProfe) {
-               reserva.usuario_login = 'romo.admin'; 
-               
-               // Ajustamos la fecha al formato que acepta la BBDD (YYYY-MM-DD)
-               if (reserva.fecha_reserva && reserva.fecha_reserva.includes('T')) {
-                 reserva.fecha_reserva = reserva.fecha_reserva.substring(0, 10);
-               }
-               
-               await api.update('reservas', reserva.id, reserva);
-            }
-          } else {
-            // Pulsó cancelar o dejó en blanco: ABORTAMOS TODO
-            alert("Operación cancelada. El profesor y sus reservas están a salvo.");
-            return; 
           }
+          
+          // borramos la credencial de acceso del profesor
+          await api.delete('usuarios', usuarioDelProfe.login);
         }
-        
-        // Ya resueltas las reservas, borramos su credencial
-        await api.delete('usuarios', usuarioDelProfe.login);
-      }
 
-      // Finalmente, eliminamos al profesor
-      let exito = await api.delete('profesores', dni_nie);
-      
-      if (exito) {
-        await this.cargarTodo();
-      } else {
-        alert("Error: No se ha podido eliminar al profesor. Puede que esté vinculado a incidencias.");
+        // finalmente eliminamos al profesor de la tabla principal
+        let exito = await api.delete('profesores', dni_nie);
+        
+        if (exito) {
+          await this.cargarTodo();
+        } else {
+          alert("Fallo en la bbdd: No se ha podido eliminar al profesor porque está vinculado a incidencias.");
+        }
+      } catch (error) {
+        alert("Fallo en la bbdd al intentar eliminar al profesor");
       }
     }
   }

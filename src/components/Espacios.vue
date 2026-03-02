@@ -129,27 +129,41 @@ export default {
 
   methods: {
     async cargarTodo() {
-      this.listaDeEspacios = await api.getAll('espacios');
+      try {
+        this.listaDeEspacios = await api.getAll('espacios') || [];
+      } catch (error) {
+        alert("Fallo en la bbdd al cargar los espacios");
+      }
     },
 
     async guardar() {
       let datosParaEnviar = { ...this.formulario };
 
-      if (this.estoyEditando) {
-        await api.update('espacios', datosParaEnviar.id, datosParaEnviar);
-      } else {
-        await api.create('espacios', datosParaEnviar); 
+      // recortamos la fecha para evitar error 500
+      if (datosParaEnviar.zfecha) {
+        datosParaEnviar.zfecha = datosParaEnviar.zfecha.substring(0, 10);
       }
 
-      this.cancelar(); 
-      setTimeout(async () => { 
-        await this.cargarTodo(); 
-      }, 500);
+      try {
+        if (this.estoyEditando) {
+          await api.update('espacios', datosParaEnviar.id, datosParaEnviar);
+        } else {
+          await api.create('espacios', datosParaEnviar); 
+        }
+
+        this.cancelar(); 
+        setTimeout(async () => { await this.cargarTodo(); }, 500);
+      } catch (error) {
+        alert("Fallo en la bbdd al guardar el espacio");
+      }
     },
 
     cargarDatosEnFormulario(espacio) {
       this.formulario = { ...espacio, zusuario: 'david.romo' };
       this.estoyEditando = true; 
+      
+      // bajamos suavemente por si la lista es muy larga
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     },
 
     cancelar() {
@@ -167,11 +181,15 @@ export default {
 
     async borrarEspacio(id) {
       if (confirm('¿Seguro que quieres borrar este espacio?')) {
-        let exito = await api.delete('espacios', id);
-        if (exito) {
-          await this.cargarTodo();
-        } else {
-          alert("No se puede borrar este espacio porque tiene reservas o incidencias asociadas.");
+        try {
+          let exito = await api.delete('espacios', id);
+          if (exito) {
+            await this.cargarTodo();
+          } else {
+            alert("Fallo en la bbdd: no se puede borrar porque tiene reservas o incidencias asociadas");
+          }
+        } catch (error) {
+          alert("Fallo en la bbdd al borrar el espacio");
         }
       }
     }

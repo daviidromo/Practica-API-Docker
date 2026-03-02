@@ -42,14 +42,15 @@ export default {
   methods: {
     async iniciarSesion() {
       const loginActual = this.formulario.login;
-      // Guardamos zusuario para las peticiones de la API
+      
+      // guardamos el usuario logueado en la memoria del navegador
       localStorage.setItem('zusuario_guardado', this.formulario.zusuario);
 
       try {
         let todosLosUsuarios = await api.getAll('usuarios') || [];
-        let usuarioVerificar = todosLosUsuarios.find(u => u.login === loginActual);
+        let usuarioVerificar = todosLosUsuarios.find(usuario => usuario.login === loginActual);
 
-        // Verificamos si la cuenta está bloqueada o de baja
+        // comprobamos que no este de baja ni bloqueado antes de entrar
         if (usuarioVerificar && usuarioVerificar.estado_id !== 'ACT_DR') {
            let motivo = usuarioVerificar.estado_id === 'BAJA_DR' ? 'se encuentra de BAJA' : 'está BLOQUEADA por seguridad';
            alert(`ACCESO DENEGADO: La cuenta '${loginActual}' ${motivo}.`);
@@ -64,20 +65,25 @@ export default {
 
         const datos = await respuesta.json();
 
+        // gestionamos los fallos de contraseña
         if (!respuesta.ok) {
-           if (!this.intentosFallidos[loginActual]) this.intentosFallidos[loginActual] = 0;
+           if (!this.intentosFallidos[loginActual]) {
+             this.intentosFallidos[loginActual] = 0;
+           }
            this.intentosFallidos[loginActual]++;
 
+           // si falla 3 veces bloqueamos la cuenta en la bbdd
            if (this.intentosFallidos[loginActual] >= 3) {
              await this.bloquearCuentaSeguridad(loginActual);
              alert(`ATENCIÓN: Cuenta '${loginActual}' bloqueada por seguridad tras 3 intentos fallidos.`);
              return;
            }
+           
            alert(`Credenciales incorrectas. Te quedan ${3 - this.intentosFallidos[loginActual]} intentos.`);
            return; 
         }
 
-        // GUARDAMOS DATOS DE SESIÓN
+        // guardamos el login y el rol para usarlos en el resto de la app
         localStorage.setItem('usuario_login', loginActual);
         localStorage.setItem('rol_id', usuarioVerificar.rol_id); 
 
@@ -85,22 +91,29 @@ export default {
         this.$emit('acceso-concedido', datos);
 
       } catch (error) {
-        console.error(error);
-        alert("Error de conexión con el servidor.");
+        alert("Fallo en la bbdd al intentar iniciar sesion");
       }
     },
 
     async bloquearCuentaSeguridad(login) {
       try {
-        let todos = await api.getAll('usuarios') || [];
-        let u = todos.find(x => x.login === login);
-        if (u) {
-          u.estado_id = 'BLOQ_DR';
-          if (u.zfecha) u.zfecha = u.zfecha.substring(0, 10);
-          u.zusuario = localStorage.getItem('zusuario_guardado');
-          await api.update('usuarios', login, u);
+        let todosLosUsuarios = await api.getAll('usuarios') || [];
+        let usuarioABloquear = todosLosUsuarios.find(usuario => usuario.login === login);
+        
+        if (usuarioABloquear) {
+          usuarioABloquear.estado_id = 'BLOQ_DR';
+          
+          // recortamos la fecha para evitar el error 500 al hacer update
+          if (usuarioABloquear.zfecha) {
+            usuarioABloquear.zfecha = usuarioABloquear.zfecha.substring(0, 10);
+          }
+          
+          usuarioABloquear.zusuario = localStorage.getItem('zusuario_guardado');
+          await api.update('usuarios', login, usuarioABloquear);
         }
-      } catch (e) { console.error("Fallo al bloquear usuario", e); }
+      } catch (error) { 
+        alert("Fallo en la bbdd al intentar bloquear la cuenta"); 
+      }
     }
   }
 };
