@@ -210,12 +210,16 @@ export default {
 
     cambiarDia(diasASumar) {
       // Navegamos por el calendario sumando o restando dias
+              this.cancelar(); 
+
       let fechaCalculada = new Date(this.filtroFecha);
       fechaCalculada.setDate(fechaCalculada.getDate() + diasASumar);
       this.filtroFecha = fechaCalculada.toISOString().substring(0, 10);
     },
     
     diaActual() { 
+              this.cancelar(); 
+
       this.filtroFecha = new Date().toISOString().substring(0, 10); 
     },
 
@@ -314,8 +318,8 @@ export default {
     cancelar() {
       // Devolvemos el formulario a su estado vacío original
       this.formulario = { 
-        id: null, espacio_id: '', horario_id: '', 
-        usuario_login: this.loginUsuario, fecha_reserva: this.filtroFecha, 
+        id: null, espacio_id: '', horario_id: '',
+        usuario_login: this.loginUsuario, fecha_reserva: '', 
         motivo_reserva: '', zusuario: 'david.romo'
       };
       this.estoyEditando = false;
